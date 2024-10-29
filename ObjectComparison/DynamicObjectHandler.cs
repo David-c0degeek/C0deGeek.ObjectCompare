@@ -6,10 +6,7 @@ internal class DynamicObjectHandler : IDynamicTypeHandler
 {
     public bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config)
     {
-        var dynamicObj1 = obj1 as DynamicObject;
-        var dynamicObj2 = obj2 as DynamicObject;
-
-        if (dynamicObj1 == null || dynamicObj2 == null)
+        if (obj1 is not DynamicObject dynamicObj1 || obj2 is not DynamicObject dynamicObj2)
             return false;
 
         var memberNames = GetMemberNames(dynamicObj1).Union(GetMemberNames(dynamicObj2)).Distinct();

@@ -30,13 +30,11 @@ internal class DynamicObjectComparer
         var type = obj1?.GetType() ?? obj2?.GetType();
         var handler = GetTypeHandler(type);
 
-        if (handler == null)
-        {
-            result.Differences.Add($"Unsupported dynamic type at {path}: {type?.Name}");
-            return false;
-        }
+        if (handler != null) return handler.Compare(obj1, obj2, path, result, _config);
+        
+        result.Differences.Add($"Unsupported dynamic type at {path}: {type?.Name}");
+        return false;
 
-        return handler.Compare(obj1, obj2, path, result, _config);
     }
 
     private IDynamicTypeHandler GetTypeHandler(Type type)
