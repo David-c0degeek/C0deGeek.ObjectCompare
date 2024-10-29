@@ -4,12 +4,8 @@ using System.Reflection;
 
 namespace ObjectComparison;
 
-internal class CustomGetMemberBinder : GetMemberBinder
+internal class CustomGetMemberBinder(string name) : GetMemberBinder(name, true)
 {
-    public CustomGetMemberBinder(string name) : base(name, true)
-    {
-    }
-
     public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject errorSuggestion)
     {
         // Create the expression that will get the member value

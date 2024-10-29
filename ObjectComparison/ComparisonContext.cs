@@ -30,21 +30,14 @@ internal class ComparisonContext
         }
     }
 
-    public readonly struct ComparisonPair : IEquatable<ComparisonPair>
+    public readonly struct ComparisonPair(object obj1, object obj2) : IEquatable<ComparisonPair>
     {
-        private readonly object _obj1;
-        private readonly object _obj2;
-        private readonly int _hashCode;
-
-        public ComparisonPair(object obj1, object obj2)
-        {
-            _obj1 = obj1;
-            _obj2 = obj2;
-            _hashCode = HashCode.Combine(
-                RuntimeHelpers.GetHashCode(obj1),
-                RuntimeHelpers.GetHashCode(obj2)
-            );
-        }
+        private readonly object _obj1 = obj1;
+        private readonly object _obj2 = obj2;
+        private readonly int _hashCode = HashCode.Combine(
+            RuntimeHelpers.GetHashCode(obj1),
+            RuntimeHelpers.GetHashCode(obj2)
+        );
 
         public bool Equals(ComparisonPair other)
         {
