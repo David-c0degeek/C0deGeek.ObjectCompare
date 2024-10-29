@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Dynamic;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -83,7 +84,7 @@ namespace ObjectComparison
         /// Whether to compare read-only properties
         /// </summary>
         public bool CompareReadOnlyProperties { get; set; } = true;
-        
+
         /// <summary>
         /// Relative tolerance for floating-point comparisons
         /// </summary>
@@ -101,22 +102,6 @@ namespace ObjectComparison
     public interface ICustomComparer
     {
         bool AreEqual(object obj1, object obj2, ComparisonConfig config);
-    }
-
-    /// <summary>
-    /// Enum defining how null values should be handled
-    /// </summary>
-    public enum NullHandling
-    {
-        /// <summary>
-        /// Treat null values as distinct values
-        /// </summary>
-        Strict,
-
-        /// <summary>
-        /// Treat null and empty values as equivalent
-        /// </summary>
-        Loose
     }
 
     /// <summary>
@@ -172,14 +157,16 @@ namespace ObjectComparison
     {
         public string Path { get; }
 
-        public ComparisonException(string message) : base(message) { }
-        
+        public ComparisonException(string message) : base(message)
+        {
+        }
+
         public ComparisonException(string message, string path) : base(message)
         {
             Path = path;
         }
 
-        public ComparisonException(string message, string path, Exception inner) 
+        public ComparisonException(string message, string path, Exception inner)
             : base(message, inner)
         {
             Path = path;
@@ -284,7 +271,7 @@ namespace ObjectComparison
             IsSimpleType = IsSimpleTypeInternal(type);
             UnderlyingType = Nullable.GetUnderlyingType(type);
             HasCustomEquality = typeof(IEquatable<>).MakeGenericType(type).IsAssignableFrom(type);
-            
+
             if (HasCustomEquality)
             {
                 EqualityComparer = CreateEqualityComparer(type);
@@ -339,7 +326,7 @@ namespace ObjectComparison
         }
     }
 
-  /// <summary>
+    /// <summary>
     /// Advanced cloning functionality using expression trees
     /// </summary>
     internal class ExpressionCloner
@@ -416,19 +403,19 @@ namespace ObjectComparison
         private object CloneCollection(object obj, Type type, TypeMetadata metadata)
         {
             var enumerable = (IEnumerable)obj;
-            
+
             // Handle arrays
             if (type.IsArray)
             {
                 var array = (Array)obj;
                 var elementType = type.GetElementType();
                 var clone = Array.CreateInstance(elementType, array.Length);
-                
+
                 for (int i = 0; i < array.Length; i++)
                 {
                     clone.SetValue(CloneObject(array.GetValue(i)), i);
                 }
-                
+
                 return clone;
             }
 
@@ -437,12 +424,12 @@ namespace ObjectComparison
             {
                 var listType = typeof(List<>).MakeGenericType(metadata.ItemType);
                 var list = (IList)Activator.CreateInstance(listType);
-                
+
                 foreach (var item in enumerable)
                 {
                     list.Add(CloneObject(item));
                 }
-                
+
                 // If the original was a List<T>, return as is
                 if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
                 {
@@ -452,7 +439,8 @@ namespace ObjectComparison
                 // Try to convert to the original collection type
                 try
                 {
-                    var constructor = type.GetConstructor(new[] { typeof(IEnumerable<>).MakeGenericType(metadata.ItemType) });
+                    var constructor = type.GetConstructor(new[]
+                        { typeof(IEnumerable<>).MakeGenericType(metadata.ItemType) });
                     if (constructor != null)
                     {
                         return constructor.Invoke(new[] { list });
@@ -498,7 +486,7 @@ namespace ObjectComparison
                 }
                 catch (Exception ex)
                 {
-                    _config.Logger?.LogWarning(ex, "Failed to clone property {Property} of type {Type}", 
+                    _config.Logger?.LogWarning(ex, "Failed to clone property {Property} of type {Type}",
                         prop.Name, type.Name);
                 }
             }
@@ -518,7 +506,7 @@ namespace ObjectComparison
                     }
                     catch (Exception ex)
                     {
-                        _config.Logger?.LogWarning(ex, "Failed to clone field {Field} of type {Type}", 
+                        _config.Logger?.LogWarning(ex, "Failed to clone field {Field} of type {Type}",
                             field.Name, type.Name);
                     }
                 }
@@ -543,7 +531,7 @@ namespace ObjectComparison
             }
             catch (Exception ex)
             {
-                throw new ComparisonException($"Failed to create instance of type {type.Name}","", ex);
+                throw new ComparisonException($"Failed to create instance of type {type.Name}", "", ex);
             }
         }
     }
@@ -585,7 +573,7 @@ namespace ObjectComparison
             }
             catch (Exception ex)
             {
-                throw new ComparisonException("Comparison failed","", ex);
+                throw new ComparisonException("Comparison failed", "", ex);
             }
             finally
             {
@@ -597,9 +585,9 @@ namespace ObjectComparison
 
             return result;
         }
-
     }
-	/// <summary>
+
+    /// <summary>
     /// Context for tracking comparison state
     /// </summary>
     internal class ComparisonContext
@@ -625,7 +613,7 @@ namespace ObjectComparison
                 ObjectStack.Pop();
             }
         }
-        
+
         public readonly struct ComparisonPair : IEquatable<ComparisonPair>
         {
             private readonly object _obj1;
@@ -644,7 +632,7 @@ namespace ObjectComparison
 
             public bool Equals(ComparisonPair other)
             {
-                return ReferenceEquals(_obj1, other._obj1) && 
+                return ReferenceEquals(_obj1, other._obj1) &&
                        ReferenceEquals(_obj2, other._obj2);
             }
 
@@ -659,7 +647,7 @@ namespace ObjectComparison
 
     public partial class ObjectComparer
     {
-        private void CompareObjectsIterative(object obj1, object obj2, string path, 
+        private void CompareObjectsIterative(object obj1, object obj2, string path,
             ComparisonResult result, ComparisonContext context)
         {
             var stack = new Stack<(object, object, string, int)>();
@@ -724,7 +712,8 @@ namespace ObjectComparison
 
             if (context.ObjectsCompared >= _config.MaxObjectCount)
             {
-                result.Differences.Add($"Comparison aborted: exceeded maximum object count of {_config.MaxObjectCount}");
+                result.Differences.Add(
+                    $"Comparison aborted: exceeded maximum object count of {_config.MaxObjectCount}");
                 result.AreEqual = false;
             }
         }
@@ -735,7 +724,7 @@ namespace ObjectComparison
 
             if (obj1 == null || obj2 == null)
             {
-                if (_config.NullHandling == NullHandling.Loose && IsEmpty(obj1) && IsEmpty(obj2))
+                if (_config.NullValueHandling == NullHandling.Loose && IsEmpty(obj1) && IsEmpty(obj2))
                 {
                     return true;
                 }
@@ -748,7 +737,7 @@ namespace ObjectComparison
             return false;
         }
 
-        private void HandleCustomComparison(ICustomComparer comparer, object obj1, object obj2, 
+        private void HandleCustomComparison(ICustomComparer comparer, object obj1, object obj2,
             string path, ComparisonResult result)
         {
             try
@@ -765,7 +754,7 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareNullableTypes(object obj1, object obj2, string path, 
+        private void CompareNullableTypes(object obj1, object obj2, string path,
             ComparisonResult result, TypeMetadata metadata)
         {
             try
@@ -786,6 +775,7 @@ namespace ObjectComparison
                         result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
                         result.AreEqual = false;
                     }
+
                     return;
                 }
 
@@ -801,7 +791,7 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareSimpleTypes(object obj1, object obj2, string path, 
+        private void CompareSimpleTypes(object obj1, object obj2, string path,
             ComparisonResult result, TypeMetadata metadata)
         {
             if (metadata.HasCustomEquality && metadata.EqualityComparer != null)
@@ -811,6 +801,7 @@ namespace ObjectComparison
                     result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
                     result.AreEqual = false;
                 }
+
                 return;
             }
 
@@ -1161,7 +1152,7 @@ namespace ObjectComparison
     /// </summary>
     internal static class CollectionHandling
     {
-        public static object CloneCollection(Type collectionType, IEnumerable source, 
+        public static object CloneCollection(Type collectionType, IEnumerable source,
             Func<object, object> elementCloner)
         {
             // Handle arrays
@@ -1192,7 +1183,7 @@ namespace ObjectComparison
             return CloneGenericList(collectionType, source, elementCloner);
         }
 
-        private static object CloneArray(Type arrayType, IEnumerable source, 
+        private static object CloneArray(Type arrayType, IEnumerable source,
             Func<object, object> elementCloner)
         {
             var elementType = arrayType.GetElementType();
@@ -1207,13 +1198,13 @@ namespace ObjectComparison
             return array;
         }
 
-        private static object CloneDictionary(Type dictType, IEnumerable source, 
+        private static object CloneDictionary(Type dictType, IEnumerable source,
             Func<object, object> elementCloner)
         {
             var genericArgs = dictType.GetGenericArguments();
             var keyType = genericArgs[0];
             var valueType = genericArgs[1];
-            
+
             var dictType1 = typeof(Dictionary<,>).MakeGenericType(keyType, valueType);
             var dict = Activator.CreateInstance(dictType1);
             var addMethod = dictType1.GetMethod("Add");
@@ -1228,7 +1219,7 @@ namespace ObjectComparison
             return dict;
         }
 
-        private static object CloneSet(Type setType, IEnumerable source, 
+        private static object CloneSet(Type setType, IEnumerable source,
             Func<object, object> elementCloner)
         {
             var elementType = setType.GetGenericArguments()[0];
@@ -1245,7 +1236,7 @@ namespace ObjectComparison
             return set;
         }
 
-        private static object CloneQueueOrStack(Type collectionType, IEnumerable source, 
+        private static object CloneQueueOrStack(Type collectionType, IEnumerable source,
             Func<object, object> elementCloner)
         {
             var elementType = collectionType.GetGenericArguments()[0];
@@ -1280,7 +1271,7 @@ namespace ObjectComparison
             }
         }
 
-        private static object CloneGenericList(Type collectionType, IEnumerable source, 
+        private static object CloneGenericList(Type collectionType, IEnumerable source,
             Func<object, object> elementCloner)
         {
             var elementType = GetElementType(collectionType);
@@ -1305,7 +1296,7 @@ namespace ObjectComparison
             {
                 var constructor = collectionType.GetConstructor(
                     new[] { typeof(IEnumerable<>).MakeGenericType(elementType) });
-                
+
                 if (constructor != null)
                 {
                     return constructor.Invoke(new[] { list });
@@ -1321,28 +1312,28 @@ namespace ObjectComparison
 
         private static bool IsDictionary(Type type)
         {
-            return type.IsGenericType && 
+            return type.IsGenericType &&
                    (type.GetGenericTypeDefinition() == typeof(Dictionary<,>) ||
                     type.GetGenericTypeDefinition() == typeof(IDictionary<,>));
         }
 
         private static bool IsSet(Type type)
         {
-            return type.IsGenericType && 
+            return type.IsGenericType &&
                    (type.GetGenericTypeDefinition() == typeof(HashSet<>) ||
                     type.GetGenericTypeDefinition() == typeof(ISet<>));
         }
 
         private static bool IsQueueOrStack(Type type)
         {
-            return type.IsGenericType && 
+            return type.IsGenericType &&
                    (type.GetGenericTypeDefinition() == typeof(Queue<>) ||
                     type.GetGenericTypeDefinition() == typeof(Stack<>));
         }
 
         private static bool IsGenericList(Type type)
         {
-            return type.IsGenericType && 
+            return type.IsGenericType &&
                    type.GetGenericTypeDefinition() == typeof(List<>);
         }
 
@@ -1363,8 +1354,8 @@ namespace ObjectComparison
             }
 
             var enumType = collectionType.GetInterfaces()
-                .FirstOrDefault(i => i.IsGenericType && 
-                                   i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+                .FirstOrDefault(i => i.IsGenericType &&
+                                     i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 
             return enumType?.GetGenericArguments()[0] ?? typeof(object);
         }
@@ -1435,6 +1426,320 @@ namespace ObjectComparison
             return absoluteDifference / maxValue <= relativeTolerance;
         }
     }
+
+    /// <summary>
+    /// Thread-safe cache management
+    /// </summary>
+    internal static class ThreadSafeCache
+    {
+        private static readonly ConcurrentDictionary<Type, TypeMetadata> MetadataCache = new();
+        private static readonly ConcurrentDictionary<(Type, string), Func<object, object>> PropertyGetters = new();
+
+        private static readonly ConcurrentDictionary<Type, Func<object, IDictionary<string, object>>> DynamicAccessors =
+            new();
+
+        private static readonly ReaderWriterLockSlim CacheLock = new();
+        private static readonly int MaxCacheSize = 1000; // Configurable cache size limit
+
+        public static void ClearCaches()
+        {
+            using (new WriteLockScope(CacheLock))
+            {
+                MetadataCache.Clear();
+                PropertyGetters.Clear();
+                DynamicAccessors.Clear();
+            }
+        }
+
+        public static TypeMetadata GetOrAddMetadata(Type type, Func<Type, TypeMetadata> factory)
+        {
+            if (MetadataCache.Count >= MaxCacheSize)
+            {
+                // Implement cache cleanup if needed
+                TrimCache();
+            }
+
+            return MetadataCache.GetOrAdd(type, factory);
+        }
+
+        private static void TrimCache()
+        {
+            using (new WriteLockScope(CacheLock))
+            {
+                // Remove least recently used items
+                var itemsToRemove = MetadataCache.Count - (MaxCacheSize * 3 / 4);
+                if (itemsToRemove > 0)
+                {
+                    var oldest = MetadataCache.Take(itemsToRemove).ToList();
+                    foreach (var item in oldest)
+                    {
+                        MetadataCache.TryRemove(item.Key, out _);
+                    }
+                }
+            }
+        }
+
+        private class WriteLockScope : IDisposable
+        {
+            private readonly ReaderWriterLockSlim _lock;
+
+            public WriteLockScope(ReaderWriterLockSlim @lock)
+            {
+                _lock = @lock;
+                _lock.EnterWriteLock();
+            }
+
+            public void Dispose()
+            {
+                _lock.ExitWriteLock();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Dynamic object handling support
+    /// </summary>
+    internal class DynamicObjectComparer
+    {
+        private readonly ComparisonConfig _config;
+        private readonly ConcurrentDictionary<Type, IDynamicTypeHandler> _typeHandlers;
+
+        public DynamicObjectComparer(ComparisonConfig config)
+        {
+            _config = config;
+            _typeHandlers = new ConcurrentDictionary<Type, IDynamicTypeHandler>();
+            InitializeTypeHandlers();
+        }
+
+        private void InitializeTypeHandlers()
+        {
+            _typeHandlers[typeof(ExpandoObject)] = new ExpandoObjectHandler();
+            _typeHandlers[typeof(DynamicObject)] = new DynamicObjectHandler();
+            // Add other dynamic type handlers as needed
+        }
+
+        public bool AreEqual(object obj1, object obj2, string path, ComparisonResult result)
+        {
+            var type = obj1?.GetType() ?? obj2?.GetType();
+            var handler = GetTypeHandler(type);
+
+            if (handler == null)
+            {
+                result.Differences.Add($"Unsupported dynamic type at {path}: {type?.Name}");
+                return false;
+            }
+
+            return handler.Compare(obj1, obj2, path, result, _config);
+        }
+
+        private IDynamicTypeHandler GetTypeHandler(Type type)
+        {
+            if (type == null) return null;
+
+            var (handler, _) = _typeHandlers.GetOrAddWithStatus(type, t =>
+            {
+                if (typeof(ExpandoObject).IsAssignableFrom(t))
+                    return new ExpandoObjectHandler();
+                if (typeof(DynamicObject).IsAssignableFrom(t))
+                    return new DynamicObjectHandler();
+                // Add other type handler mappings
+                return null;
+            });
+
+            return handler;
+        }
+    }
+
+    internal interface IDynamicTypeHandler
+    {
+        bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config);
+    }
+
+    internal class ExpandoObjectHandler : IDynamicTypeHandler
+    {
+        public bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config)
+        {
+            var dict1 = obj1 as IDictionary<string, object>;
+            var dict2 = obj2 as IDictionary<string, object>;
+
+            if (dict1 == null || dict2 == null)
+                return false;
+
+            var allKeys = dict1.Keys.Union(dict2.Keys).Distinct();
+            var isEqual = true;
+
+            foreach (var key in allKeys)
+            {
+                var hasValue1 = dict1.TryGetValue(key, out var value1);
+                var hasValue2 = dict2.TryGetValue(key, out var value2);
+
+                if (!hasValue1 || !hasValue2)
+                {
+                    result.Differences.Add($"Property '{key}' exists in only one object at {path}");
+                    isEqual = false;
+                    continue;
+                }
+
+                if (value1 == null && value2 == null)
+                    continue;
+
+                if ((value1 == null) != (value2 == null))
+                {
+                    result.Differences.Add($"Property '{key}' null mismatch at {path}");
+                    isEqual = false;
+                    continue;
+                }
+
+                // Handle nested dynamic objects
+                if (value1 is ExpandoObject)
+                {
+                    var nestedResult = new ComparisonResult();
+                    if (!Compare(value1, value2, $"{path}.{key}", nestedResult, config))
+                    {
+                        result.Differences.AddRange(nestedResult.Differences);
+                        isEqual = false;
+                    }
+                }
+                else
+                {
+                    // Use the standard comparison logic for non-dynamic values
+                    if (!AreValuesEqual(value1, value2, config))
+                    {
+                        result.Differences.Add($"Property '{key}' value mismatch at {path}");
+                        isEqual = false;
+                    }
+                }
+            }
+
+            return isEqual;
+        }
+
+        private bool AreValuesEqual(object value1, object value2, ComparisonConfig config)
+        {
+            // Implement value comparison logic or delegate to main comparer
+            // This is a simplified version
+            return Equals(value1, value2);
+        }
+    }
+
+    internal class DynamicObjectHandler : IDynamicTypeHandler
+    {
+        public bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config)
+        {
+            var dynamicObj1 = obj1 as DynamicObject;
+            var dynamicObj2 = obj2 as DynamicObject;
+
+            if (dynamicObj1 == null || dynamicObj2 == null)
+                return false;
+
+            var memberNames = GetMemberNames(dynamicObj1).Union(GetMemberNames(dynamicObj2)).Distinct();
+            var isEqual = true;
+
+            foreach (var memberName in memberNames)
+            {
+                var value1 = GetMemberValue(dynamicObj1, memberName);
+                var value2 = GetMemberValue(dynamicObj2, memberName);
+
+                if (!AreValuesEqual(value1, value2, $"{path}.{memberName}", result, config))
+                {
+                    isEqual = false;
+                }
+            }
+
+            return isEqual;
+        }
+
+        private IEnumerable<string> GetMemberNames(DynamicObject obj)
+        {
+            var memberNames = new List<string>();
+            obj.GetDynamicMemberNames()?.ToList().ForEach(name => memberNames.Add(name));
+            return memberNames;
+        }
+
+        private object GetMemberValue(DynamicObject obj, string memberName)
+        {
+            var binder = new CustomGetMemberBinder(memberName);
+            obj.TryGetMember(binder, out var result);
+            return result;
+        }
+
+        private bool AreValuesEqual(object value1, object value2, string path,
+            ComparisonResult result, ComparisonConfig config)
+        {
+            // Handle nested dynamic objects
+            if (value1 is DynamicObject || value2 is DynamicObject)
+            {
+                return Compare(value1, value2, path, result, config);
+            }
+
+            // Handle ExpandoObjects
+            if (value1 is ExpandoObject || value2 is ExpandoObject)
+            {
+                var handler = new ExpandoObjectHandler();
+                return handler.Compare(value1, value2, path, result, config);
+            }
+
+            // Handle regular values
+            if (!Equals(value1, value2))
+            {
+                result.Differences.Add($"Value mismatch at {path}: {value1} != {value2}");
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    internal class CustomGetMemberBinder : GetMemberBinder
+    {
+        public CustomGetMemberBinder(string name) : base(name, true)
+        {
+        }
+
+        public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject errorSuggestion)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    internal static class ThreadSafeExtensions
+    {
+        public static (TValue Value, bool Added) GetOrAddWithStatus<TKey, TValue>(
+            this ConcurrentDictionary<TKey, TValue> dictionary,
+            TKey key,
+            Func<TKey, TValue> valueFactory)
+        {
+            bool added = false;
+            var value = dictionary.GetOrAdd(key, k =>
+            {
+                added = true;
+                return valueFactory(k);
+            });
+            return (value, added);
+        }
+
+        public static void AddRange<T>(this ConcurrentBag<T> bag, IEnumerable<T> items)
+        {
+            foreach (var item in items)
+            {
+                bag.Add(item);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Enum defining how null values should be handled
+    /// </summary>
+    public enum NullHandling
+    {
+        /// <summary>
+        /// Treat null values as distinct values
+        /// </summary>
+        Strict,
+
+        /// <summary>
+        /// Treat null and empty values as equivalent
+        /// </summary>
+        Loose
+    }
 }
-		
-		
