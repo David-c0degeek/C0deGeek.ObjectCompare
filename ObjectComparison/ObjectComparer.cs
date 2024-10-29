@@ -200,20 +200,18 @@ namespace ObjectComparison
 
                 if (metadata is { HasCustomEquality: true, EqualityComparer: not null })
                 {
-                    if (!metadata.EqualityComparer(value1, value2))
-                    {
-                        result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
-                        result.AreEqual = false;
-                    }
+                    if (metadata.EqualityComparer(value1, value2)) return;
+                    
+                    result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
+                    result.AreEqual = false;
 
                     return;
                 }
 
-                if (!Equals(value1, value2))
-                {
-                    result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
-                    result.AreEqual = false;
-                }
+                if (Equals(value1, value2)) return;
+                
+                result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
+                result.AreEqual = false;
             }
             catch (Exception ex)
             {
@@ -230,11 +228,10 @@ namespace ObjectComparison
             var rounded1 = Math.Round(value1, _config.DecimalPrecision);
             var rounded2 = Math.Round(value2, _config.DecimalPrecision);
 
-            if (rounded1 != rounded2)
-            {
-                result.Differences.Add($"Decimal difference at {path}: {rounded1} != {rounded2}");
-                result.AreEqual = false;
-            }
+            if (rounded1 == rounded2) return;
+            
+            result.Differences.Add($"Decimal difference at {path}: {rounded1} != {rounded2}");
+            result.AreEqual = false;
         }
 
         private void CompareComplexObjects(object? obj1, object? obj2, string path,
@@ -322,10 +319,13 @@ namespace ObjectComparison
 
         private bool IsEmpty(object? obj)
         {
-            if (obj == null) return true;
-            if (obj is string str) return string.IsNullOrEmpty(str);
-            if (obj is IEnumerable enumerable) return !enumerable.Cast<object>().Any();
-            return false;
+            return obj switch
+            {
+                null => true,
+                string str => string.IsNullOrEmpty(str),
+                IEnumerable enumerable => !enumerable.Cast<object>().Any(),
+                _ => false
+            };
         }
 
         private sealed class FastEqualityComparer : IEqualityComparer<object>
@@ -355,11 +355,10 @@ namespace ObjectComparison
             {
                 try
                 {
-                    if (!metadata.EqualityComparer(obj1, obj2))
-                    {
-                        result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
-                        result.AreEqual = false;
-                    }
+                    if (metadata.EqualityComparer(obj1, obj2)) return;
+                    
+                    result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
+                    result.AreEqual = false;
 
                     return;
                 }
@@ -377,22 +376,20 @@ namespace ObjectComparison
 
             if (obj1 is float f1 && obj2 is float f2)
             {
-                if (!NumericComparison.AreFloatingPointEqual(f1, f2, _config))
-                {
-                    result.Differences.Add($"Float difference at {path}: {f1} != {f2}");
-                    result.AreEqual = false;
-                }
+                if (NumericComparison.AreFloatingPointEqual(f1, f2, _config)) return;
+                
+                result.Differences.Add($"Float difference at {path}: {f1} != {f2}");
+                result.AreEqual = false;
 
                 return;
             }
 
             if (obj1 is double d1 && obj2 is double d2)
             {
-                if (!NumericComparison.AreFloatingPointEqual(d1, d2, _config))
-                {
-                    result.Differences.Add($"Double difference at {path}: {d1} != {d2}");
-                    result.AreEqual = false;
-                }
+                if (NumericComparison.AreFloatingPointEqual(d1, d2, _config)) return;
+                
+                result.Differences.Add($"Double difference at {path}: {d1} != {d2}");
+                result.AreEqual = false;
 
                 return;
             }
@@ -477,20 +474,18 @@ namespace ObjectComparison
 
                 for (var j = unmatchedItems2.Count - 1; j >= 0; j--)
                 {
-                    if (itemComparer.Equals(item1, unmatchedItems2[j]))
-                    {
-                        unmatchedItems2.RemoveAt(j);
-                        matchFound = true;
-                        break;
-                    }
+                    if (!itemComparer.Equals(item1, unmatchedItems2[j])) continue;
+                    
+                    unmatchedItems2.RemoveAt(j);
+                    matchFound = true;
+                    break;
                 }
 
-                if (!matchFound)
-                {
-                    result.Differences.Add($"No matching item found in collection at {path}[{i}]");
-                    result.AreEqual = false;
-                    return;
-                }
+                if (matchFound) continue;
+                
+                result.Differences.Add($"No matching item found in collection at {path}[{i}]");
+                result.AreEqual = false;
+                return;
             }
         }
 
@@ -514,12 +509,11 @@ namespace ObjectComparison
 
             foreach (var kvp in counts1)
             {
-                if (!counts2.TryGetValue(kvp.Key, out var count2) || count2 != kvp.Value)
-                {
-                    result.Differences.Add($"Collection item count mismatch at {path}");
-                    result.AreEqual = false;
-                    return;
-                }
+                if (counts2.TryGetValue(kvp.Key, out var count2) && count2 == kvp.Value) continue;
+                
+                result.Differences.Add($"Collection item count mismatch at {path}");
+                result.AreEqual = false;
+                return;
             }
         }
 
@@ -541,20 +535,18 @@ namespace ObjectComparison
                     var tempResult = new ComparisonResult();
                     CompareObjectsIterative(item1, list2[j], $"{path}[{i}]", tempResult, new ComparisonContext());
 
-                    if (tempResult.AreEqual)
-                    {
-                        matched[j] = true;
-                        matchFound = true;
-                        break;
-                    }
+                    if (!tempResult.AreEqual) continue;
+                    
+                    matched[j] = true;
+                    matchFound = true;
+                    break;
                 }
 
-                if (!matchFound)
-                {
-                    result.Differences.Add($"No matching item found in collection at {path}[{i}]");
-                    result.AreEqual = false;
-                    return;
-                }
+                if (matchFound) continue;
+                
+                result.Differences.Add($"No matching item found in collection at {path}[{i}]");
+                result.AreEqual = false;
+                return;
             }
         }
 
