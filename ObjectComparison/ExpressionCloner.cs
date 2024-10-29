@@ -21,8 +21,7 @@ public sealed class ExpressionCloner(ComparisonConfig config)
             { typeof(DateTime), obj => obj },
             { typeof(string), obj => obj },
             { typeof(decimal), obj => obj },
-            { typeof(Guid), obj => obj },
-            // Add other immutable types as needed
+            { typeof(Guid), obj => obj }
         };
     }
 
