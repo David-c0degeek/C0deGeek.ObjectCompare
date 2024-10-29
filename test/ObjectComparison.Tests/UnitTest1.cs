@@ -259,14 +259,15 @@ public class ObjectComparerTests
     {
         // Arrange
         var original = new CircularReferenceClass { Id = 1 };
-        original.Reference = original;
+        original.Reference = original; // Self-reference
 
         // Act
         var snapshot = _comparer.TakeSnapshot(original);
 
         // Assert
-        Assert.AreEqual(snapshot.Id, original.Id);
-        Assert.AreSame(snapshot, snapshot.Reference); // Circular reference maintained
+        Assert.AreEqual(original.Id, snapshot.Id); // Values should match
+        Assert.IsNotNull(snapshot.Reference); // Reference should exist
+        Assert.AreSame(snapshot, snapshot.Reference); // Should point to itself, not create new instance
     }
 
     #endregion

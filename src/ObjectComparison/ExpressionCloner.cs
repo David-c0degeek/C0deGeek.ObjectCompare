@@ -11,7 +11,7 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 {
     private readonly ComparisonConfig _config = config ?? throw new ArgumentNullException(nameof(config));
     private readonly Dictionary<Type, Func<object, object>> _customCloners = InitializeCustomCloners();
-    private readonly Dictionary<object, object> _cloneCache = new(new ReferenceEqualityComparer());
+    private readonly Dictionary<object, object> _circularReferenceTracker = new(new ReferenceEqualityComparer());
     private static readonly ObjectCloneCache CloneFuncCache = new();
 
     private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
@@ -49,36 +49,40 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         if (obj is null) return null;
 
         var type = obj.GetType();
-
-        // Check if we've already cloned this object
-        if (_cloneCache.TryGetValue(obj, out var existingClone))
-        {
-            return existingClone;
-        }
-
         var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
 
-        // Handle simple types
+        // Handle simple types directly
         if (metadata.IsSimpleType)
         {
             return obj;
         }
 
-        // Create the new instance first
+        // Check circular reference
+        if (_circularReferenceTracker.TryGetValue(obj, out var existingClone))
+        {
+            return existingClone;
+        }
+
+        // Create new instance
         var clone = CreateInstance(type);
 
-        // Add to cache before cloning properties to handle circular references
-        _cloneCache[obj] = clone ?? throw new ComparisonException($"Failed to create instance of type {type.Name}");
+        // Add to tracker BEFORE recursing into properties
+        _circularReferenceTracker[obj] = clone ?? throw new ComparisonException($"Failed to create instance of type {type.Name}");
 
         try
         {
-            return metadata.IsCollection
-                ? CloneCollection(obj, type)
-                : CloneComplexObject(obj, type);
+            // Clone the object's contents
+            if (metadata.IsCollection)
+            {
+                return CloneCollection(obj, type);
+            }
+
+            CloneObjectProperties(obj, clone);
+            return clone;
         }
         catch
         {
-            _cloneCache.Remove(obj);
+            _circularReferenceTracker.Remove(obj);
             throw;
         }
     }
@@ -264,28 +268,35 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         ArgumentNullException.ThrowIfNull(target);
 
         var type = source.GetType();
+        var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
 
-        try
+        foreach (var prop in metadata.Properties)
         {
-            // Use cached clone function from static cache
-            var cloneFunc = CloneFuncCache.GetOrCreateCloneFunc(type);
-            var clonedTarget = cloneFunc(source, target, _config);
+            if (!prop.CanWrite) continue;
+            if (_config.ExcludedProperties.Contains(prop.Name)) continue;
 
-            if (clonedTarget != target)
+            try
             {
-                // If a new instance was created instead of modifying the target,
-                // copy its properties to the target
-                CloneObjectPropertiesReflection(clonedTarget, target);
+                var getter = TypeCache.GetPropertyGetter(type, prop.Name);
+                var setter = TypeCache.GetPropertySetter(type, prop.Name);
+                var value = getter(source);
+                
+                // Clone the value (will return from tracker if circular)
+                var clonedValue = CloneObject(value);
+                
+                // Set the value directly - no need for CreateSafeValue here
+                setter(target, clonedValue);
+            }
+            catch (Exception ex)
+            {
+                _config.Logger?.LogWarning(ex, "Failed to clone property {Property} of type {Type}",
+                    prop.Name, type.Name);
             }
         }
-        catch (Exception ex)
-        {
-            _config.Logger?.LogWarning(ex,
-                "Failed to use cached clone function for type {Type}, falling back to reflection",
-                type.Name);
 
-            // Fall back to reflection-based cloning
-            CloneObjectPropertiesReflection(source, target);
+        if (_config.ComparePrivateFields)
+        {
+            CloneFields(source, target, metadata);
         }
     }
 
@@ -332,11 +343,12 @@ public sealed class ExpressionCloner(ComparisonConfig config)
             try
             {
                 var value = field.GetValue(source);
+                
+                // Clone the value (will return from tracker if circular)
                 var clonedValue = CloneObject(value);
-
-                // Create safe value for the field
-                var safeValue = CreateSafeValue(clonedValue, field.FieldType);
-                field.SetValue(target, safeValue);
+                
+                // Set the value directly
+                field.SetValue(target, clonedValue);
             }
             catch (Exception ex)
             {
