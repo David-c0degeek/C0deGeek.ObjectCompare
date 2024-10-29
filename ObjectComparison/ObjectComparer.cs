@@ -200,11 +200,22 @@ namespace ObjectComparison
 
                 if (metadata is { HasCustomEquality: true, EqualityComparer: not null })
                 {
+                    // Skip comparison if both values are null
+                    if (value1 == null && value2 == null) return;
+
+                    // Handle cases where one value is null
+                    if (value1 == null || value2 == null)
+                    {
+                        result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
+                        result.AreEqual = false;
+                        return;
+                    }
+
+                    // Safe to call EqualityComparer as we've verified neither value is null
                     if (metadata.EqualityComparer(value1, value2)) return;
                     
                     result.Differences.Add($"Nullable value difference at {path}: {value1} != {value2}");
                     result.AreEqual = false;
-
                     return;
                 }
 
@@ -314,7 +325,24 @@ namespace ObjectComparison
         {
             if (ReferenceEquals(value1, value2)) return true;
             if (value1 == null || value2 == null) return false;
-            return value1.Equals(value2);
+
+            try
+            {
+                return value1.Equals(value2);
+            }
+            catch (Exception)
+            {
+                // If Equals throws an exception, try reverse comparison
+                try
+                {
+                    return value2.Equals(value1);
+                }
+                catch (Exception)
+                {
+                    // If both comparisons fail, consider values not equal
+                    return false;
+                }
+            }
         }
 
         private bool IsEmpty(object? obj)

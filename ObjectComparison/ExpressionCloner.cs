@@ -62,7 +62,7 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         {
             return metadata.IsCollection
                 ? CloneCollection(obj, type)
-                : CloneComplexObject(obj, type, metadata);
+                : CloneComplexObject(obj, type);
         }
         finally
         {
@@ -72,33 +72,55 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 
     private sealed class ObjectCloneCache
     {
-        private readonly ConcurrentDictionary<Type, Func<object, object>> _cloneFuncs = new();
+        private readonly ConcurrentDictionary<Type, Func<object, object, ComparisonConfig, object>> _cloneFuncs = new();
 
-        public Func<object, object> GetOrCreateCloneFunc(Type type)
+        public Func<object, object, ComparisonConfig, object> GetOrCreateCloneFunc(Type type)
         {
             return _cloneFuncs.GetOrAdd(type, CreateCloneExpression);
         }
 
-        private static Func<object, object> CreateCloneExpression(Type type)
+        private static Func<object, object, ComparisonConfig, object> CreateCloneExpression(Type type)
         {
-            var parameter = Expression.Parameter(typeof(object), "obj");
-            var convertedParameter = Expression.Convert(parameter, type);
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            var sourceParam = Expression.Parameter(typeof(object), "source");
+            var targetParam = Expression.Parameter(typeof(object), "target");
+            var configParam = Expression.Parameter(typeof(ComparisonConfig), "config");
 
-            var bindings = properties
-                .Where(p => p is { CanRead: true, CanWrite: true })
-                .Select(p => Expression.Bind(
-                    p,
-                    Expression.Property(convertedParameter, p)
-                ));
+            var typedSource = Expression.Convert(sourceParam, type);
+            var typedTarget = Expression.Convert(targetParam, type);
 
-            var memberInit = Expression.MemberInit(
-                Expression.New(type),
-                bindings
-            );
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p is { CanRead: true, CanWrite: true });
 
-            var convertedResult = Expression.Convert(memberInit, typeof(object));
-            return Expression.Lambda<Func<object, object>>(convertedResult, parameter).Compile();
+            var assignments = new List<Expression>();
+
+            foreach (var prop in properties)
+            {
+                var propAccess = Expression.Property(typedSource, prop);
+                var targetPropAccess = Expression.Property(typedTarget, prop);
+
+                // Create a safe value expression
+                var createSafeValueMethod = typeof(ExpressionCloner).GetMethod(
+                    "CreateSafeValue",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+
+                var safeValueExpression = Expression.Call(
+                    createSafeValueMethod,
+                    propAccess,
+                    Expression.Constant(prop.PropertyType));
+
+                assignments.Add(
+                    Expression.Assign(
+                        targetPropAccess,
+                        Expression.Convert(safeValueExpression, prop.PropertyType)
+                    )
+                );
+            }
+
+            assignments.Add(targetParam);
+            var body = Expression.Block(assignments);
+
+            return Expression.Lambda<Func<object, object, ComparisonConfig, object>>(
+                body, sourceParam, targetParam, configParam).Compile();
         }
     }
 
@@ -126,11 +148,11 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         return CloneNonGenericCollection(enumerable);
     }
 
-    private object CloneArray(IEnumerable source, Type arrayType)
+    private Array CloneArray(IEnumerable source, Type arrayType)
     {
-        var elementType = arrayType.GetElementType() ?? 
+        var elementType = arrayType.GetElementType() ??
                           throw new ArgumentException($"Could not get element type for array type {arrayType.Name}");
-        
+
         var sourceArray = source.Cast<object>().ToArray();
         var array = Array.CreateInstance(elementType, sourceArray.Length);
 
@@ -176,17 +198,18 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         return list;
     }
 
-    private object CloneNonGenericCollection(IEnumerable source)
+    private ArrayList CloneNonGenericCollection(IEnumerable source)
     {
         var list = new ArrayList();
         foreach (var item in source)
         {
             list.Add(CloneObject(item));
         }
+
         return list;
     }
 
-    private object CloneComplexObject(object obj, Type type, TypeMetadata metadata)
+    private object CloneComplexObject(object obj, Type type)
     {
         var clone = CreateInstance(type);
         if (clone is null)
@@ -204,17 +227,124 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         {
             // Try to get the parameterless constructor
             var constructor = type.GetConstructor(Type.EmptyTypes);
-            if (constructor is not null)
-            {
-                return Activator.CreateInstance(type);
-            }
-
-            // If no parameterless constructor exists, use alternative instantiation
-            return RuntimeHelpers.GetUninitializedObject(type);
+            return constructor is not null
+                ? Activator.CreateInstance(type)
+                // If no parameterless constructor exists, use alternative instantiation
+                : RuntimeHelpers.GetUninitializedObject(type);
         }
         catch (Exception ex)
         {
             throw new ComparisonException($"Failed to create instance of type {type.Name}", "", ex);
         }
+    }
+
+    private void CloneObjectProperties(object source, object target)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var type = source.GetType();
+
+        try
+        {
+            // Use cached clone function if available
+            var cloneFunc = _cloneCache.GetOrCreateCloneFunc(type);
+            cloneFunc(source, target, _config);
+        }
+        catch (Exception ex)
+        {
+            _config.Logger?.LogWarning(ex,
+                "Failed to use cached clone function for type {Type}, falling back to reflection",
+                type.Name);
+
+            // Fall back to reflection-based cloning
+            CloneObjectPropertiesReflection(source, target);
+        }
+    }
+
+    private void CloneObjectPropertiesReflection(object source, object target)
+    {
+        var type = source.GetType();
+        var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
+
+        foreach (var prop in metadata.Properties)
+        {
+            if (!prop.CanWrite) continue;
+            if (_config.ExcludedProperties.Contains(prop.Name)) continue;
+
+            try
+            {
+                var getter = TypeCache.GetPropertyGetter(type, prop.Name);
+                var setter = TypeCache.GetPropertySetter(type, prop.Name);
+                var value = getter(source);
+                var clonedValue = CloneObject(value);
+
+                // Create safe value for the property
+                var safeValue = CreateSafeValue(clonedValue, prop.PropertyType);
+                setter(target, safeValue);
+            }
+            catch (Exception ex)
+            {
+                _config.Logger?.LogWarning(ex, "Failed to clone property {Property} of type {Type}",
+                    prop.Name, type.Name);
+            }
+        }
+
+        if (_config.ComparePrivateFields)
+        {
+            CloneFields(source, target, metadata);
+        }
+    }
+
+    private void CloneFields(object source, object target, TypeMetadata metadata)
+    {
+        foreach (var field in metadata.Fields)
+        {
+            if (_config.ExcludedProperties.Contains(field.Name)) continue;
+
+            try
+            {
+                var value = field.GetValue(source);
+                var clonedValue = CloneObject(value);
+
+                // Create safe value for the field
+                var safeValue = CreateSafeValue(clonedValue, field.FieldType);
+                field.SetValue(target, safeValue);
+            }
+            catch (Exception ex)
+            {
+                _config.Logger?.LogWarning(ex, "Failed to clone field {Field} of type {Type}",
+                    field.Name, source.GetType().Name);
+            }
+        }
+    }
+
+    private static object? CreateSafeValue(object? value, Type targetType)
+    {
+        if (value != null) return value;
+
+        // Handle nullable value types
+        var nullableUnderlyingType = Nullable.GetUnderlyingType(targetType);
+        if (nullableUnderlyingType != null)
+        {
+            // For nullable types, null is a valid value
+            return null;
+        }
+
+        // For non-nullable value types, create a default instance
+        if (!targetType.IsValueType) return null;
+
+        try
+        {
+            return Activator.CreateInstance(targetType);
+        }
+        catch
+        {
+            // If we can't create an instance, fall back to the default value
+            return RuntimeHelpers.GetUninitializedObject(targetType);
+        }
+
+        // For reference types, null is acceptable
+        return null;
     }
 }
