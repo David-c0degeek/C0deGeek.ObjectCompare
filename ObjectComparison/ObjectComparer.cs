@@ -334,12 +334,12 @@ namespace ObjectComparison
         {
             var unmatchedItems2 = new List<object>(list2);
 
-            for (int i = 0; i < list1.Count; i++)
+            for (var i = 0; i < list1.Count; i++)
             {
                 var item1 = list1[i];
                 var matchFound = false;
 
-                for (int j = unmatchedItems2.Count - 1; j >= 0; j--)
+                for (var j = unmatchedItems2.Count - 1; j >= 0; j--)
                 {
                     if (itemComparer.Equals(item1, unmatchedItems2[j]))
                     {
@@ -366,19 +366,19 @@ namespace ObjectComparison
 
             foreach (var item in list1)
             {
-                counts1.TryGetValue(item, out int count);
+                counts1.TryGetValue(item, out var count);
                 counts1[item] = count + 1;
             }
 
             foreach (var item in list2)
             {
-                counts2.TryGetValue(item, out int count);
+                counts2.TryGetValue(item, out var count);
                 counts2[item] = count + 1;
             }
 
             foreach (var kvp in counts1)
             {
-                if (!counts2.TryGetValue(kvp.Key, out int count2) || count2 != kvp.Value)
+                if (!counts2.TryGetValue(kvp.Key, out var count2) || count2 != kvp.Value)
                 {
                     result.Differences.Add($"Collection item count mismatch at {path}");
                     result.AreEqual = false;
@@ -392,12 +392,12 @@ namespace ObjectComparison
         {
             var matched = new bool[list2.Count];
 
-            for (int i = 0; i < list1.Count; i++)
+            for (var i = 0; i < list1.Count; i++)
             {
                 var item1 = list1[i];
                 var matchFound = false;
 
-                for (int j = 0; j < list2.Count; j++)
+                for (var j = 0; j < list2.Count; j++)
                 {
                     if (matched[j]) continue;
 
@@ -431,7 +431,7 @@ namespace ObjectComparison
         private void CompareOrderedCollectionsWithComparer(List<object> list1, List<object> list2,
             string path, ComparisonResult result, IEqualityComparer itemComparer)
         {
-            for (int i = 0; i < list1.Count; i++)
+            for (var i = 0; i < list1.Count; i++)
             {
                 if (!itemComparer.Equals(list1[i], list2[i]))
                 {
@@ -445,7 +445,7 @@ namespace ObjectComparison
         private void CompareOrderedCollections(List<object> list1, List<object> list2,
             string path, ComparisonResult result, Stack<(object, object, string, int)> stack, int depth)
         {
-            for (int i = 0; i < list1.Count; i++)
+            for (var i = 0; i < list1.Count; i++)
             {
                 stack.Push((list1[i], list2[i], $"{path}[{i}]", depth + 1));
             }

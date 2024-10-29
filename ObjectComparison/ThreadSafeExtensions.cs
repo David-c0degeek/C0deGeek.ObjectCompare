@@ -9,7 +9,7 @@ internal static class ThreadSafeExtensions
         TKey key,
         Func<TKey, TValue> valueFactory)
     {
-        bool added = false;
+        var added = false;
         var value = dictionary.GetOrAdd(key, k =>
         {
             added = true;

@@ -45,7 +45,7 @@ internal static class CollectionHandling
         var sourceArray = source.Cast<object>().ToArray();
         var array = Array.CreateInstance(elementType, sourceArray.Length);
 
-        for (int i = 0; i < sourceArray.Length; i++)
+        for (var i = 0; i < sourceArray.Length; i++)
         {
             array.SetValue(elementCloner(sourceArray[i]), i);
         }

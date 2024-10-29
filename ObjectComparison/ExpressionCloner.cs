@@ -89,7 +89,7 @@ internal class ExpressionCloner
             var elementType = type.GetElementType();
             var clone = Array.CreateInstance(elementType, array.Length);
 
-            for (int i = 0; i < array.Length; i++)
+            for (var i = 0; i < array.Length; i++)
             {
                 clone.SetValue(CloneObject(array.GetValue(i)), i);
             }
