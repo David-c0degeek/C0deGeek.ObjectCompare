@@ -10,9 +10,14 @@ namespace ObjectComparison;
 public sealed class ExpressionCloner(ComparisonConfig config)
 {
     private readonly ComparisonConfig _config = config ?? throw new ArgumentNullException(nameof(config));
-    private readonly HashSet<object> _clonedObjects = [];
     private readonly Dictionary<Type, Func<object, object>> _customCloners = InitializeCustomCloners();
-    private readonly ObjectCloneCache _cloneCache = new();
+    private readonly Dictionary<object, object> _cloneCache = new(new ReferenceEqualityComparer());    
+    
+    private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
+    {
+        public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
+        public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
+    }
     
     private static Dictionary<Type, Func<object, object>> InitializeCustomCloners()
     {
@@ -43,6 +48,13 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         if (obj is null) return null;
 
         var type = obj.GetType();
+        
+        // Check if we've already cloned this object
+        if (_cloneCache.TryGetValue(obj, out var existingClone))
+        {
+            return existingClone;
+        }
+
         var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
 
         // Handle simple types
@@ -51,12 +63,11 @@ public sealed class ExpressionCloner(ComparisonConfig config)
             return obj;
         }
 
-        // Check for circular references
-        if (!_clonedObjects.Add(obj))
-        {
-            _config.Logger?.LogWarning("Circular reference detected while cloning type {Type}", type.Name);
-            return obj;
-        }
+        // Create the new instance first
+        var clone = CreateInstance(type);
+
+        // Add to cache before cloning properties to handle circular references
+        _cloneCache[obj] = clone ?? throw new ComparisonException($"Failed to create instance of type {type.Name}");
 
         try
         {
@@ -64,9 +75,10 @@ public sealed class ExpressionCloner(ComparisonConfig config)
                 ? CloneCollection(obj, type)
                 : CloneComplexObject(obj, type);
         }
-        finally
+        catch
         {
-            _clonedObjects.Remove(obj);
+            _cloneCache.Remove(obj);
+            throw;
         }
     }
 

@@ -70,6 +70,9 @@ namespace ObjectComparison
                     if (depth >= _config.MaxDepth)
                     {
                         result.MaxDepthPath = currentPath;
+                        result.MaxDepthReached = depth;
+                        result.AreEqual = false;
+                        result.Differences.Add($"Maximum depth of {_config.MaxDepth} reached at {currentPath}");
                         continue;
                     }
 
