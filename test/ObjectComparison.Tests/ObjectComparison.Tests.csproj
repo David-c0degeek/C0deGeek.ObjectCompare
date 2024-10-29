@@ -21,7 +21,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\ObjectComparison\ObjectComparison.csproj" />
       <ProjectReference Include="..\..\src\ObjectComparison\ObjectComparison.csproj" />
     </ItemGroup>
 
