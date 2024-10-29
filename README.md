@@ -5,13 +5,20 @@ A high-performance, extensible .NET library for deep object comparison with supp
 ## Features
 
 - Deep comparison of objects with circular reference detection
-- Object snapshot capability for state tracking and comparison
-- Support for custom comparison logic
+- Object snapshot capability with intelligent cloning
+- Support for custom comparison and cloning logic
 - Collection comparison with order-sensitive and order-insensitive modes
 - Dynamic object comparison support (ExpandoObject, DynamicObject)
 - Floating-point comparison with configurable precision
-- Nullable type handling
-- Thread-safe caching of type metadata
+- Advanced type handling:
+  - Nullable types
+  - Value types with safe default initialization
+  - Reference types with proper null handling
+  - Custom type cloning
+- Thread-safe caching:
+  - Type metadata caching
+  - Expression compilation caching
+  - Property access optimization
 - Comprehensive comparison results with detailed differences
 - Expression tree-based property access for performance
 - Support for private field comparison
@@ -46,7 +53,7 @@ var snapshot = comparer.TakeSnapshot(originalObject);
 
 ## Object Snapshots
 
-The library provides powerful snapshot capabilities for tracking object state changes over time.
+The library provides powerful snapshot capabilities with intelligent cloning.
 
 ### Basic Snapshot Usage
 
@@ -68,157 +75,82 @@ person.Hobbies.Add("Cooking");
 
 // Compare current state with snapshot
 var result = comparer.Compare(person, snapshot);
-
-// Check differences
-if (!result.AreEqual)
-{
-    foreach (var difference in result.Differences)
-    {
-        Console.WriteLine(difference);
-    }
-}
 ```
 
-### Collection Snapshots
+### Custom Type Cloning
 
 ```csharp
-var comparer = new ObjectComparer(new ComparisonConfig
+var config = new ComparisonConfig
 {
-    IgnoreCollectionOrder = true // Optional: ignore item order
-});
-
-var people = new List<Person>
-{
-    new() { Name = "Alice", Age = 25 },
-    new() { Name = "Bob", Age = 30 }
+    CustomCloners = new Dictionary<Type, Func<object, object>>
+    {
+        { 
+            typeof(DateTime), 
+            obj => ((DateTime)obj).Date // Clone only the date part
+        },
+        {
+            typeof(StringBuilder),
+            obj => new StringBuilder(((StringBuilder)obj).ToString())
+        }
+    }
 };
 
-// Take snapshot of the collection
-var snapshot = comparer.TakeSnapshot(people);
-
-// Modify collection
-people[0].Age = 26;
-people.Add(new Person { Name = "Charlie", Age = 35 });
-
-// Compare with snapshot
-var result = comparer.Compare(people, snapshot);
+var comparer = new ObjectComparer(config);
 ```
 
-### Periodic Snapshots
+### Type Handling
 
 ```csharp
-var comparer = new ObjectComparer();
-var snapshots = new Dictionary<DateTime, Person>();
+// Value Types
+struct Point { public int X, Y; }
+var point = new Point { X = 1, Y = 2 };
+var snapshot = comparer.TakeSnapshot(point); // Creates proper value copy
 
-var person = new Person { Name = "Jane", Age = 28 };
+// Nullable Types
+int? nullableValue = 42;
+var snapshot = comparer.TakeSnapshot(nullableValue); // Preserves null state
 
-// Take periodic snapshots
-snapshots[DateTime.Now] = comparer.TakeSnapshot(person);
-
-person.Age = 29;
-snapshots[DateTime.Now.AddMonths(1)] = comparer.TakeSnapshot(person);
-
-// Compare changes between any two points in time
-var result = comparer.Compare(
-    snapshots.First().Value, 
-    snapshots.Last().Value
-);
+// Collections
+var list = new List<Point> { new() { X = 1, Y = 2 } };
+var snapshot = comparer.TakeSnapshot(list); // Deep clones elements
 ```
-
-### Snapshot Features
-
-- Deep cloning of object graphs
-- Support for circular references
-- Thread-safe operation
-- Works with all supported types:
-    - Simple objects
-    - Complex object graphs
-    - Collections
-    - Dynamic objects
-- Configurable comparison options
-- No serialization required
-- Maintains object integrity
 
 ## Advanced Configuration
 
 ```csharp
 var config = new ComparisonConfig
 {
+    // Comparison Options
     ComparePrivateFields = true,
     DeepComparison = true,
-    DecimalPrecision = 4,
     IgnoreCollectionOrder = true,
-    MaxDepth = 10,
-    NullValueHandling = NullHandling.Loose,
+    
+    // Precision Settings
+    DecimalPrecision = 4,
     FloatingPointTolerance = 1e-10,
-    UseRelativeFloatingPointComparison = true
-};
-
-var comparer = new ObjectComparer(config);
-```
-
-## Custom Comparison Logic
-
-```csharp
-public class CustomDateComparer : ICustomComparer
-{
-    public bool AreEqual(object obj1, object obj2, ComparisonConfig config)
-    {
-        if (obj1 is DateTime date1 && obj2 is DateTime date2)
-        {
-            return date1.Date == date2.Date; // Compare only dates, ignore time
-        }
-        return false;
-    }
-}
-
-var config = new ComparisonConfig
-{
-    CustomComparers = new Dictionary<Type, ICustomComparer>
-    {
-        { typeof(DateTime), new CustomDateComparer() }
-    }
+    UseRelativeFloatingPointComparison = true,
+    
+    // Null Handling
+    NullValueHandling = NullHandling.Loose,
+    
+    // Performance Options
+    MaxDepth = 10,
+    MaxObjectCount = 10000,
+    UseCachedMetadata = true,
+    
+    // Property Options
+    ExcludedProperties = new HashSet<string> { "CachedValue", "LastModified" },
+    CompareReadOnlyProperties = true,
+    
+    // Type-Specific Options
+    CustomComparers = new Dictionary<Type, ICustomComparer>(),
+    CollectionItemComparers = new Dictionary<Type, IEqualityComparer>(),
+    
+    // Diagnostics
+    TrackPropertyPaths = true,
+    Logger = loggerFactory.CreateLogger<ObjectComparer>()
 };
 ```
-
-## Collection Comparison
-
-```csharp
-// Order-sensitive comparison
-var config = new ComparisonConfig { IgnoreCollectionOrder = false };
-var comparer = new ObjectComparer(config);
-var result = comparer.Compare(list1, list2);
-
-// Order-insensitive comparison
-config.IgnoreCollectionOrder = true;
-result = comparer.Compare(list1, list2);
-```
-
-## Dynamic Object Support
-
-```csharp
-dynamic obj1 = new ExpandoObject();
-obj1.Name = "Test";
-obj1.Value = 42;
-
-dynamic obj2 = new ExpandoObject();
-obj2.Name = "Test";
-obj2.Value = 42;
-
-var result = comparer.Compare(obj1, obj2);
-```
-
-## Performance Considerations
-
-- Use `UseCachedMetadata = true` for better performance with repeated comparisons
-- Set appropriate `MaxDepth` and `MaxObjectCount` limits for large object graphs
-- Consider using custom comparers for complex type comparisons
-- Use `ComparePrivateFields = false` when only public property comparison is needed
-- Snapshots are stored in memory, so manage them appropriately for large objects
-
-## Thread Safety
-
-The library is thread-safe and can be used in concurrent scenarios. Type metadata, compiled expressions, and snapshots are handled in a thread-safe manner.
 
 ## Error Handling
 
@@ -227,26 +159,99 @@ try
 {
     var result = comparer.Compare(obj1, obj2);
 }
-catch (ComparisonException ex)
+catch (ComparisonException ex) when (ex.Path != null)
 {
     Console.WriteLine($"Comparison failed at path: {ex.Path}");
     Console.WriteLine($"Error: {ex.Message}");
 }
+catch (ArgumentException ex)
+{
+    Console.WriteLine($"Invalid argument: {ex.Message}");
+}
 ```
 
-## Logging
+### Common Exceptions
+
+- `ComparisonException`: General comparison failures
+- `ArgumentException`: Invalid types or configurations
+- `InvalidOperationException`: Operation not supported for type
+- `NotSupportedException`: Unsupported type or operation
+
+## Performance Optimization
+
+### Caching
 
 ```csharp
-var loggerFactory = LoggerFactory.Create(builder =>
-{
-    builder.AddConsole();
-});
-
+// Enable all caching features
 var config = new ComparisonConfig
 {
-    Logger = loggerFactory.CreateLogger<ObjectComparer>()
+    UseCachedMetadata = true,
+    TrackPropertyPaths = false // Disable for better performance
+};
+
+// Pre-compile frequently used types
+TypeCache.GetMetadata(typeof(MyFrequentType), true);
+```
+
+### Memory Management
+
+```csharp
+// Limit object graph traversal
+var config = new ComparisonConfig
+{
+    MaxDepth = 5,
+    MaxObjectCount = 1000,
+    ExcludedProperties = new HashSet<string> { "LargeCollection", "CachedData" }
 };
 ```
+
+### Collection Handling
+
+```csharp
+// Fast collection comparison for simple types
+var config = new ComparisonConfig
+{
+    IgnoreCollectionOrder = true, // Uses optimized comparison
+    CollectionItemComparers = new Dictionary<Type, IEqualityComparer>
+    {
+        { typeof(int), EqualityComparer<int>.Default }
+    }
+};
+```
+
+## Thread Safety
+
+The library uses several thread-safe mechanisms:
+- Concurrent collections for caches
+- Immutable configuration objects
+- Thread-local contexts for comparison state
+- Lock-free algorithms where possible
+
+### Safe Concurrent Usage
+
+```csharp
+// Create once and reuse
+private static readonly ObjectComparer SharedComparer = new();
+
+// Safe for concurrent use
+public async Task CompareAsync(object obj1, object obj2)
+{
+    await Task.Run(() => SharedComparer.Compare(obj1, obj2));
+}
+```
+
+## Best Practices
+
+1. Reuse `ObjectComparer` instances
+2. Configure appropriate depth limits
+3. Use custom comparers for complex types
+4. Enable caching for repeated comparisons
+5. Handle circular references appropriately
+6. Use type-specific equality comparers
+7. Consider memory usage with large object graphs
+8. Implement proper error handling
+9. Use logging for troubleshooting
+10. Test with representative data sets
 
 ## License
 
