@@ -7,7 +7,7 @@ internal static class ThreadSafeExtensions
     public static (TValue Value, bool Added) GetOrAddWithStatus<TKey, TValue>(
         this ConcurrentDictionary<TKey, TValue> dictionary,
         TKey key,
-        Func<TKey, TValue> valueFactory)
+        Func<TKey, TValue> valueFactory) where TKey : notnull
     {
         var added = false;
         var value = dictionary.GetOrAdd(key, k =>

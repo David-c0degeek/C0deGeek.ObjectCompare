@@ -66,7 +66,7 @@ public class ComparisonConfig
     /// <summary>
     /// Optional logger for diagnostics
     /// </summary>
-    public ILogger Logger { get; set; }
+    public ILogger? Logger { get; set; }
 
     /// <summary>
     /// Whether to track property access paths for better error reporting

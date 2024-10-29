@@ -18,7 +18,7 @@ public class ComparisonResult
     /// <summary>
     /// The path where comparison stopped (if max depth was reached)
     /// </summary>
-    public string MaxDepthPath { get; set; }
+    public string? MaxDepthPath { get; set; }
 
     /// <summary>
     /// Time taken to perform the comparison

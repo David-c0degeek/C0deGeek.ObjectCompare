@@ -45,7 +45,7 @@ internal class ComparisonContext
                    ReferenceEquals(_obj2, other._obj2);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return obj is ComparisonPair other && Equals(other);
         }

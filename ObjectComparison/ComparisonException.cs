@@ -5,7 +5,7 @@
 /// </summary>
 public class ComparisonException : Exception
 {
-    public string Path { get; }
+    public string? Path { get; }
 
     public ComparisonException(string message) : base(message)
     {
