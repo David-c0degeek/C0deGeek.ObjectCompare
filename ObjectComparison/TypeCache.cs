@@ -8,61 +8,73 @@ namespace ObjectComparison;
 /// </summary>
 internal static class TypeCache
 {
+    private const int DefaultCacheSize = 1000;
     private static readonly ConcurrentDictionary<Type, TypeMetadata> MetadataCache = new();
-    private static readonly ConcurrentDictionary<Type, Func<object, object>> CloneFuncs = new();
-    private static readonly ConcurrentDictionary<(Type, string), Func<object, object>> PropertyGetters = new();
-    private static readonly ConcurrentDictionary<(Type, string), Action<object, object>> PropertySetters = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Name), Func<object, object>> PropertyGetters = new();
+    private static readonly ConcurrentDictionary<(Type Type, string Name), Action<object, object>> PropertySetters = new();
+    private static readonly ReaderWriterLockSlim CacheLock = new();
 
     public static TypeMetadata GetMetadata(Type type, bool useCache)
     {
-        return !useCache 
-            ? new TypeMetadata(type) 
-            : MetadataCache.GetOrAdd(type, t => new TypeMetadata(t));
-    }
+        ArgumentNullException.ThrowIfNull(type);
 
-    public static Func<object, object> GetCloneFunc(Type type)
-    {
-        return CloneFuncs.GetOrAdd(type, CreateCloneExpression);
+        if (!useCache)
+        {
+            return new TypeMetadata(type);
+        }
+
+        return MetadataCache.GetOrAdd(type, t =>
+        {
+            TrimCacheIfNeeded();
+            return new TypeMetadata(t);
+        });
     }
 
     public static Func<object, object> GetPropertyGetter(Type type, string propertyName)
     {
-        return PropertyGetters.GetOrAdd((type, propertyName), key => CreatePropertyGetter(key.Item1, key.Item2));
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(propertyName);
+
+        return PropertyGetters.GetOrAdd((type, propertyName), key => CreatePropertyGetter(key.Type, key.Name));
     }
 
     public static Action<object, object> GetPropertySetter(Type type, string propertyName)
     {
-        return PropertySetters.GetOrAdd((type, propertyName), key => CreatePropertySetter(key.Item1, key.Item2));
-    }
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(propertyName);
 
-    private static Func<object, object> CreateCloneExpression(Type type)
-    {
-        // Implementation will be shown in the cloning section
-        throw new NotImplementedException();
+        return PropertySetters.GetOrAdd((type, propertyName), key => CreatePropertySetter(key.Type, key.Name));
     }
 
     private static Func<object, object> CreatePropertyGetter(Type type, string propertyName)
     {
-        var property = type.GetProperty(propertyName);
-        if (property == null)
-        {
+        var property = type.GetProperty(propertyName) ?? 
             throw new ArgumentException($"Property {propertyName} not found on type {type.Name}");
-        }
 
         var parameter = Expression.Parameter(typeof(object), "obj");
         var convertedParameter = Expression.Convert(parameter, type);
         var propertyAccess = Expression.Property(convertedParameter, property);
         var convertedProperty = Expression.Convert(propertyAccess, typeof(object));
 
-        return Expression.Lambda<Func<object, object>>(convertedProperty, parameter).Compile();
+        try
+        {
+            return Expression.Lambda<Func<object, object>>(convertedProperty, parameter).Compile();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to create property getter for {propertyName} on type {type.Name}", ex);
+        }
     }
 
     private static Action<object, object> CreatePropertySetter(Type type, string propertyName)
     {
-        var property = type.GetProperty(propertyName);
-        if (property == null)
-        {
+        var property = type.GetProperty(propertyName) ?? 
             throw new ArgumentException($"Property {propertyName} not found on type {type.Name}");
+
+        if (!property.CanWrite)
+        {
+            throw new ArgumentException($"Property {propertyName} on type {type.Name} is read-only");
         }
 
         var instanceParam = Expression.Parameter(typeof(object), "instance");
@@ -72,6 +84,56 @@ internal static class TypeCache
         var propertyAccess = Expression.Property(convertedInstance, property);
         var assign = Expression.Assign(propertyAccess, convertedValue);
 
-        return Expression.Lambda<Action<object, object>>(assign, instanceParam, valueParam).Compile();
+        try
+        {
+            return Expression.Lambda<Action<object, object>>(assign, instanceParam, valueParam).Compile();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to create property setter for {propertyName} on type {type.Name}", ex);
+        }
+    }
+
+    private static void TrimCacheIfNeeded()
+    {
+        if (MetadataCache.Count < DefaultCacheSize) return;
+
+        using var writeLock = new WriteLockScope(CacheLock);
+        var itemsToRemove = MetadataCache.Count - (DefaultCacheSize * 3 / 4);
+        if (itemsToRemove <= 0) return;
+
+        var oldest = MetadataCache.Take(itemsToRemove).ToList();
+        foreach (var item in oldest)
+        {
+            MetadataCache.TryRemove(item.Key, out _);
+        }
+    }
+
+    private sealed class WriteLockScope : IDisposable
+    {
+        private readonly ReaderWriterLockSlim _lock;
+        private bool _disposed;
+
+        public WriteLockScope(ReaderWriterLockSlim @lock)
+        {
+            _lock = @lock;
+            _lock.EnterWriteLock();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _lock.ExitWriteLock();
+            _disposed = true;
+        }
+    }
+
+    public static void ClearCache()
+    {
+        using var writeLock = new WriteLockScope(CacheLock);
+        MetadataCache.Clear();
+        PropertyGetters.Clear();
+        PropertySetters.Clear();
     }
 }
