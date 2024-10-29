@@ -20,13 +20,14 @@ internal class TypeMetadata
 
     public TypeMetadata(Type type)
     {
-        var flags = BindingFlags.Public | BindingFlags.Instance;
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
         Properties = type.GetProperties(flags);
         Fields = type.GetFields(flags);
         IsSimpleType = IsSimpleTypeInternal(type);
         UnderlyingType = Nullable.GetUnderlyingType(type);
         HasCustomEquality = typeof(IEquatable<>).MakeGenericType(type).IsAssignableFrom(type);
-
+        ItemType = type;
+        
         if (HasCustomEquality)
         {
             EqualityComparer = CreateEqualityComparer(type);
