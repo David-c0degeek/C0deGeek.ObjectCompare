@@ -6,14 +6,14 @@ namespace ObjectComparison;
 /// <summary>
 /// Dynamic object handling support
 /// </summary>
-internal class DynamicObjectComparer
+internal sealed class DynamicObjectComparer
 {
     private readonly ComparisonConfig _config;
     private readonly ConcurrentDictionary<Type, IDynamicTypeHandler> _typeHandlers;
 
     public DynamicObjectComparer(ComparisonConfig config)
     {
-        _config = config;
+        _config = config ?? throw new ArgumentNullException(nameof(config));
         _typeHandlers = new ConcurrentDictionary<Type, IDynamicTypeHandler>();
         InitializeTypeHandlers();
     }
@@ -22,35 +22,56 @@ internal class DynamicObjectComparer
     {
         _typeHandlers[typeof(ExpandoObject)] = new ExpandoObjectHandler();
         _typeHandlers[typeof(DynamicObject)] = new DynamicObjectHandler();
-        // Add other dynamic type handlers as needed
     }
 
-    public bool AreEqual(object obj1, object obj2, string path, ComparisonResult result)
+    public bool AreEqual(object? obj1, object? obj2, string path, ComparisonResult result)
     {
-        var type = obj1?.GetType() ?? obj2?.GetType();
-        var handler = GetTypeHandler(type);
+        if (obj1 is null && obj2 is null) return true;
+        if (obj1 is null || obj2 is null)
+        {
+            result.Differences.Add($"One object is null at {path}");
+            return false;
+        }
 
-        if (handler != null) return handler.Compare(obj1, obj2, path, result, _config);
+        var type = obj1.GetType();
+        if (type != obj2.GetType())
+        {
+            result.Differences.Add($"Type mismatch at {path}: {type.Name} != {obj2.GetType().Name}");
+            return false;
+        }
+
+        var handler = GetTypeHandler(type);
+        if (handler is not null) 
+            return handler.Compare(obj1, obj2, path, result, _config);
         
-        result.Differences.Add($"Unsupported dynamic type at {path}: {type?.Name}");
+        result.Differences.Add($"Unsupported dynamic type at {path}: {type.Name}");
         return false;
 
     }
 
-    private IDynamicTypeHandler GetTypeHandler(Type type)
+    private IDynamicTypeHandler? GetTypeHandler(Type? type)
     {
-        if (type == null) return null;
+        if (type is null) return null;
 
-        var (handler, _) = _typeHandlers.GetOrAddWithStatus(type, t =>
+        return _typeHandlers.GetOrAdd(type, t =>
         {
             if (typeof(ExpandoObject).IsAssignableFrom(t))
                 return new ExpandoObjectHandler();
             if (typeof(DynamicObject).IsAssignableFrom(t))
                 return new DynamicObjectHandler();
-            // Add other type handler mappings
-            return null;
+            return NullDynamicTypeHandler.Instance;
         });
+    }
 
-        return handler;
+    // Null Object Pattern implementation
+    private sealed class NullDynamicTypeHandler : IDynamicTypeHandler
+    {
+        public static readonly NullDynamicTypeHandler Instance = new();
+        private NullDynamicTypeHandler() { }
+
+        public bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config)
+        {
+            return false;
+        }
     }
 }

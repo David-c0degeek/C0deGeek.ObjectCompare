@@ -2,14 +2,23 @@
 
 namespace ObjectComparison;
 
-internal class DynamicObjectHandler : IDynamicTypeHandler
+internal sealed class DynamicObjectHandler : IDynamicTypeHandler
 {
     public bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config)
     {
-        if (obj1 is not DynamicObject dynamicObj1 || obj2 is not DynamicObject dynamicObj2)
-            return false;
+        ArgumentNullException.ThrowIfNull(obj1);
+        ArgumentNullException.ThrowIfNull(obj2);
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(config);
 
-        var memberNames = GetMemberNames(dynamicObj1).Union(GetMemberNames(dynamicObj2)).Distinct();
+        if (obj1 is not DynamicObject dynamicObj1 || obj2 is not DynamicObject dynamicObj2)
+        {
+            result.Differences.Add($"Objects are not DynamicObject at {path}");
+            return false;
+        }
+
+        var memberNames = GetMemberNames(dynamicObj1).Union(GetMemberNames(dynamicObj2)).Distinct().ToList();
         var isEqual = true;
 
         foreach (var memberName in memberNames)
@@ -26,23 +35,31 @@ internal class DynamicObjectHandler : IDynamicTypeHandler
         return isEqual;
     }
 
-    private IEnumerable<string> GetMemberNames(DynamicObject obj)
+    private static IEnumerable<string> GetMemberNames(DynamicObject obj)
     {
-        var memberNames = new List<string>();
-        obj.GetDynamicMemberNames()?.ToList().ForEach(name => memberNames.Add(name));
-        return memberNames;
+        ArgumentNullException.ThrowIfNull(obj);
+        return obj.GetDynamicMemberNames();
     }
 
-    private object GetMemberValue(DynamicObject obj, string memberName)
+    private static object? GetMemberValue(DynamicObject obj, string memberName)
     {
+        ArgumentNullException.ThrowIfNull(obj);
+        ArgumentNullException.ThrowIfNull(memberName);
+
         var binder = new CustomGetMemberBinder(memberName);
-        obj.TryGetMember(binder, out var result);
-        return result;
+        return obj.TryGetMember(binder, out var result) ? result : null;
     }
 
-    private bool AreValuesEqual(object value1, object value2, string path,
+    private bool AreValuesEqual(object? value1, object? value2, string path,
         ComparisonResult result, ComparisonConfig config)
     {
+        if (ReferenceEquals(value1, value2)) return true;
+        if (value1 is null || value2 is null)
+        {
+            result.Differences.Add($"Null value mismatch at {path}");
+            return false;
+        }
+
         // Handle nested dynamic objects
         if (value1 is DynamicObject || value2 is DynamicObject)
         {
@@ -57,12 +74,10 @@ internal class DynamicObjectHandler : IDynamicTypeHandler
         }
 
         // Handle regular values
-        if (!Equals(value1, value2))
-        {
-            result.Differences.Add($"Value mismatch at {path}: {value1} != {value2}");
-            return false;
-        }
+        if (value1.Equals(value2)) return true;
+        
+        result.Differences.Add($"Value mismatch at {path}: {value1} != {value2}");
+        return false;
 
-        return true;
     }
 }
