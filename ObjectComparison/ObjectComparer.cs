@@ -490,7 +490,7 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareUnorderedCollectionsWithComparer(List<object> list1, List<object> list2,
+        private static void CompareUnorderedCollectionsWithComparer(List<object> list1, List<object> list2,
             string path, ComparisonResult result, IEqualityComparer itemComparer)
         {
             var unmatchedItems2 = new List<object>(list2);
@@ -517,7 +517,7 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareUnorderedCollectionsFast(List<object> list1, List<object> list2,
+        private static void CompareUnorderedCollectionsFast(List<object> list1, List<object> list2,
             string path, ComparisonResult result)
         {
             var counts1 = new Dictionary<object, int>(new FastEqualityComparer());

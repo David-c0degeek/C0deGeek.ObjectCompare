@@ -23,7 +23,7 @@ internal static class CollectionHandling
             : CloneGenericList(collectionType, source, elementCloner);
     }
 
-    private static object CloneArray(Type arrayType, IEnumerable source, Func<object, object> elementCloner)
+    private static Array CloneArray(Type arrayType, IEnumerable source, Func<object, object> elementCloner)
     {
         var elementType = arrayType.GetElementType() ?? 
             throw new ArgumentException($"Could not get element type for array type {arrayType.Name}");

@@ -11,22 +11,22 @@ internal class ComparisonContext
     public HashSet<ComparisonPair> ComparedObjects { get; } = [];
     public int CurrentDepth { get; set; }
     public Stopwatch Timer { get; } = new();
-    public int ObjectsCompared { get; set; }
-    public int MaxDepthReached { get; set; }
-    public readonly Stack<object> ObjectStack = new();
+    public int ObjectsCompared { get; private set; }
+    public int MaxDepthReached { get; private set; }
+    private readonly Stack<object> _objectStack = new();
 
     public void PushObject(object obj)
     {
-        ObjectStack.Push(obj);
+        _objectStack.Push(obj);
         ObjectsCompared++;
-        MaxDepthReached = Math.Max(MaxDepthReached, ObjectStack.Count);
+        MaxDepthReached = Math.Max(MaxDepthReached, _objectStack.Count);
     }
 
     public void PopObject()
     {
-        if (ObjectStack.Count > 0)
+        if (_objectStack.Count > 0)
         {
-            ObjectStack.Pop();
+            _objectStack.Pop();
         }
     }
 

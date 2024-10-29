@@ -29,7 +29,7 @@ internal sealed class CustomGetMemberBinder : GetMemberBinder
             : CreateReflectionAccess(target);
     }
 
-    private Expression CreateDictionaryAccess(DynamicMetaObject target)
+    private BlockExpression CreateDictionaryAccess(DynamicMetaObject target)
     {
         var dictionaryCast = Expression.Convert(target.Expression, typeof(IDictionary<string, object>));
         var nameConstant = Expression.Constant(Name);
