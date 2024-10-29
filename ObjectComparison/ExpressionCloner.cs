@@ -64,13 +64,10 @@ internal class ExpressionCloner
         try
         {
             // Handle collections
-            if (metadata.IsCollection)
-            {
-                return CloneCollection(obj, type, metadata);
-            }
-
-            // Handle complex objects
-            return CloneComplexObject(obj, type, metadata);
+            return metadata.IsCollection
+                ? CloneCollection(obj, type, metadata)
+                // Handle complex objects
+                : CloneComplexObject(obj, type, metadata);
         }
         finally
         {
@@ -169,23 +166,22 @@ internal class ExpressionCloner
         }
 
         // Clone fields
-        if (_config.ComparePrivateFields)
-        {
-            foreach (var field in metadata.Fields)
-            {
-                if (_config.ExcludedProperties.Contains(field.Name)) continue;
+        if (!_config.ComparePrivateFields) return clone;
 
-                try
-                {
-                    var value = field.GetValue(obj);
-                    var clonedValue = CloneObject(value);
-                    field.SetValue(clone, clonedValue);
-                }
-                catch (Exception ex)
-                {
-                    _config.Logger?.LogWarning(ex, "Failed to clone field {Field} of type {Type}",
-                        field.Name, type.Name);
-                }
+        foreach (var field in metadata.Fields)
+        {
+            if (_config.ExcludedProperties.Contains(field.Name)) continue;
+
+            try
+            {
+                var value = field.GetValue(obj);
+                var clonedValue = CloneObject(value);
+                field.SetValue(clone, clonedValue);
+            }
+            catch (Exception ex)
+            {
+                _config.Logger?.LogWarning(ex, "Failed to clone field {Field} of type {Type}",
+                    field.Name, type.Name);
             }
         }
 
@@ -198,13 +194,11 @@ internal class ExpressionCloner
         {
             // Try to get the parameterless constructor
             var constructor = type.GetConstructor(Type.EmptyTypes);
-            if (constructor != null)
-            {
-                return Activator.CreateInstance(type);
-            }
+            return constructor != null
+                ? Activator.CreateInstance(type)
+                // If no parameterless constructor exists, try to create uninitialized object
+                : FormatterServices.GetUninitializedObject(type);
 
-            // If no parameterless constructor exists, try to create uninitialized object
-            return FormatterServices.GetUninitializedObject(type);
         }
         catch (Exception ex)
         {

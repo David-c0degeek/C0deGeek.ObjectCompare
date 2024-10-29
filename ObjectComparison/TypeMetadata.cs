@@ -26,7 +26,6 @@ internal class TypeMetadata
         IsSimpleType = IsSimpleTypeInternal(type);
         UnderlyingType = Nullable.GetUnderlyingType(type);
         HasCustomEquality = typeof(IEquatable<>).MakeGenericType(type).IsAssignableFrom(type);
-        ItemType = type;
         
         if (HasCustomEquality)
         {

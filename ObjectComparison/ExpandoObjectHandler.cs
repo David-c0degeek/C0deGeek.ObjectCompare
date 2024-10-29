@@ -6,10 +6,7 @@ internal class ExpandoObjectHandler : IDynamicTypeHandler
 {
     public bool Compare(object obj1, object obj2, string path, ComparisonResult result, ComparisonConfig config)
     {
-        var dict1 = obj1 as IDictionary<string, object>;
-        var dict2 = obj2 as IDictionary<string, object>;
-
-        if (dict1 == null || dict2 == null)
+        if (obj1 is not IDictionary<string, object> dict1 || obj2 is not IDictionary<string, object> dict2)
             return false;
 
         var allKeys = dict1.Keys.Union(dict2.Keys).Distinct();
@@ -41,20 +38,16 @@ internal class ExpandoObjectHandler : IDynamicTypeHandler
             if (value1 is ExpandoObject)
             {
                 var nestedResult = new ComparisonResult();
-                if (!Compare(value1, value2, $"{path}.{key}", nestedResult, config))
-                {
-                    result.Differences.AddRange(nestedResult.Differences);
-                    isEqual = false;
-                }
+                if (Compare(value1, value2, $"{path}.{key}", nestedResult, config)) continue;
+                result.Differences.AddRange(nestedResult.Differences);
+                isEqual = false;
             }
             else
             {
                 // Use the standard comparison logic for non-dynamic values
-                if (!AreValuesEqual(value1, value2, config))
-                {
-                    result.Differences.Add($"Property '{key}' value mismatch at {path}");
-                    isEqual = false;
-                }
+                if (AreValuesEqual(value1, value2, config)) continue;
+                result.Differences.Add($"Property '{key}' value mismatch at {path}");
+                isEqual = false;
             }
         }
 

@@ -14,7 +14,7 @@ internal static class ThreadSafeCache
         new();
 
     private static readonly ReaderWriterLockSlim CacheLock = new();
-    private static readonly int MaxCacheSize = 1000; // Configurable cache size limit
+    private const int MaxCacheSize = 1000;
 
     public static void ClearCaches()
     {
@@ -43,13 +43,12 @@ internal static class ThreadSafeCache
         {
             // Remove least recently used items
             var itemsToRemove = MetadataCache.Count - (MaxCacheSize * 3 / 4);
-            if (itemsToRemove > 0)
+            if (itemsToRemove <= 0) return;
+            
+            var oldest = MetadataCache.Take(itemsToRemove).ToList();
+            foreach (var item in oldest)
             {
-                var oldest = MetadataCache.Take(itemsToRemove).ToList();
-                foreach (var item in oldest)
-                {
-                    MetadataCache.TryRemove(item.Key, out _);
-                }
+                MetadataCache.TryRemove(item.Key, out _);
             }
         }
     }

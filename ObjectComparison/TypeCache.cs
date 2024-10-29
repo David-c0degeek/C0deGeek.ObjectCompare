@@ -15,12 +15,9 @@ internal static class TypeCache
 
     public static TypeMetadata GetMetadata(Type type, bool useCache)
     {
-        if (!useCache)
-        {
-            return new TypeMetadata(type);
-        }
-
-        return MetadataCache.GetOrAdd(type, t => new TypeMetadata(t));
+        return !useCache 
+            ? new TypeMetadata(type) 
+            : MetadataCache.GetOrAdd(type, t => new TypeMetadata(t));
     }
 
     public static Func<object, object> GetCloneFunc(Type type)
