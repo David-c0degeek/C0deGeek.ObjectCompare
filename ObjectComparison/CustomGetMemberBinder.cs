@@ -37,7 +37,7 @@ internal sealed class CustomGetMemberBinder : GetMemberBinder
         var valueVar = Expression.Variable(typeof(object));
 
         return Expression.Block(
-            new[] { valueVar },
+            [valueVar],
             Expression.Condition(
                 Expression.Call(dictionaryCast, tryGetValue, nameConstant, valueVar),
                 valueVar,

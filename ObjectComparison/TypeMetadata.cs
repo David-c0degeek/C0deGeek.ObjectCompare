@@ -86,7 +86,7 @@ internal sealed class TypeMetadata
         }
 
         var enumType = type.GetInterfaces()
-            .Concat(new[] { type })
+            .Concat([type])
             .FirstOrDefault(t => t.IsGenericType && t.GetGenericTypeDefinition() == EnumerableGenericType);
 
         return enumType?.GetGenericArguments().FirstOrDefault();
