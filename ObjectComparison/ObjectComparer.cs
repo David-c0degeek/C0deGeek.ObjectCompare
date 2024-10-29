@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -536,7 +533,7 @@ namespace ObjectComparison
             }
             catch (Exception ex)
             {
-                throw new ComparisonException($"Failed to create instance of type {type.Name}", ex);
+                throw new ComparisonException($"Failed to create instance of type {type.Name}","", ex);
             }
         }
     }
@@ -549,7 +546,7 @@ namespace ObjectComparison
         private readonly ComparisonConfig _config;
         private readonly ExpressionCloner _cloner;
 
-        public ObjectComparer(ComparisonConfig config = null)
+        public ObjectComparer(ComparisonConfig? config = null)
         {
             _config = config ?? new ComparisonConfig();
             _cloner = new ExpressionCloner(_config);
@@ -578,7 +575,7 @@ namespace ObjectComparison
             }
             catch (Exception ex)
             {
-                throw new ComparisonException("Comparison failed", ex);
+                throw new ComparisonException("Comparison failed","", ex);
             }
             finally
             {
@@ -617,6 +614,36 @@ namespace ObjectComparison
             {
                 ObjectStack.Pop();
             }
+        }
+        
+        public readonly struct ComparisonPair : IEquatable<ComparisonPair>
+        {
+            private readonly object _obj1;
+            private readonly object _obj2;
+            private readonly int _hashCode;
+
+            public ComparisonPair(object obj1, object obj2)
+            {
+                _obj1 = obj1;
+                _obj2 = obj2;
+                _hashCode = HashCode.Combine(
+                    RuntimeHelpers.GetHashCode(obj1),
+                    RuntimeHelpers.GetHashCode(obj2)
+                );
+            }
+
+            public bool Equals(ComparisonPair other)
+            {
+                return ReferenceEquals(_obj1, other._obj1) && 
+                       ReferenceEquals(_obj2, other._obj2);
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is ComparisonPair other && Equals(other);
+            }
+
+            public override int GetHashCode() => _hashCode;
         }
     }
 
