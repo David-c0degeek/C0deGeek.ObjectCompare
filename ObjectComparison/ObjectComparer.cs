@@ -687,7 +687,7 @@ namespace ObjectComparison
                     var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
 
                     // Handle circular references
-                    var pair = new ComparisonPair(current1, current2);
+                    var pair = new ComparisonContext.ComparisonPair(current1, current2);
                     if (!context.ComparedObjects.Add(pair))
                     {
                         continue;
@@ -1153,36 +1153,6 @@ namespace ObjectComparison
             {
                 return obj?.GetHashCode() ?? 0;
             }
-        }
-
-        private readonly struct ComparisonPair : IEquatable<ComparisonPair>
-        {
-            private readonly object _obj1;
-            private readonly object _obj2;
-            private readonly int _hashCode;
-
-            public ComparisonPair(object obj1, object obj2)
-            {
-                _obj1 = obj1;
-                _obj2 = obj2;
-                _hashCode = HashCode.Combine(
-                    RuntimeHelpers.GetHashCode(obj1),
-                    RuntimeHelpers.GetHashCode(obj2)
-                );
-            }
-
-            public bool Equals(ComparisonPair other)
-            {
-                return ReferenceEquals(_obj1, other._obj1) && 
-                       ReferenceEquals(_obj2, other._obj2);
-            }
-
-            public override bool Equals(object obj)
-            {
-                return obj is ComparisonPair other && Equals(other);
-            }
-
-            public override int GetHashCode() => _hashCode;
         }
     }
 
