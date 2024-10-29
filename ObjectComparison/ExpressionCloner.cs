@@ -256,7 +256,14 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         {
             // Use cached clone function if available
             var cloneFunc = _cloneCache.GetOrCreateCloneFunc(type);
-            cloneFunc(source, target, _config);
+            var clonedTarget = cloneFunc(source, target, _config);
+
+            if (clonedTarget != target)
+            {
+                // If a new instance was created instead of modifying the target,
+                // copy its properties to the target
+                CloneObjectPropertiesReflection(clonedTarget, target);
+            }
         }
         catch (Exception ex)
         {
@@ -326,7 +333,7 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         }
     }
 
-    private static object? CreateSafeValue(object? value, Type targetType)
+    private static object CreateSafeValue(object? value, Type targetType)
     {
         ArgumentNullException.ThrowIfNull(targetType);
 
@@ -336,20 +343,27 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         var nullableUnderlyingType = Nullable.GetUnderlyingType(targetType);
         if (nullableUnderlyingType != null)
         {
-            return null;
+            // For nullable types, we can safely return null by casting
+            return null!;
         }
 
-        // For reference types, return null
-        if (!targetType.IsValueType) return null;
-        
+        // For reference types, return null with cast to remove nullability warning
+        if (!targetType.IsValueType) return null!;
+    
         // For non-nullable value types, create a default instance
         try
         {
-            return Activator.CreateInstance(targetType);
+            return Activator.CreateInstance(targetType) ?? 
+                   throw new InvalidOperationException($"Failed to create instance of type {targetType.Name}");
         }
         catch
         {
-            return RuntimeHelpers.GetUninitializedObject(targetType);
+            var uninitialized = RuntimeHelpers.GetUninitializedObject(targetType);
+            if (uninitialized == null)
+            {
+                throw new InvalidOperationException($"Failed to create uninitialized instance of type {targetType.Name}");
+            }
+            return uninitialized;
         }
     }
 }
