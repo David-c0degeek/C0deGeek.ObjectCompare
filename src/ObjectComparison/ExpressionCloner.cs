@@ -11,14 +11,15 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 {
     private readonly ComparisonConfig _config = config ?? throw new ArgumentNullException(nameof(config));
     private readonly Dictionary<Type, Func<object, object>> _customCloners = InitializeCustomCloners();
-    private readonly Dictionary<object, object> _cloneCache = new(new ReferenceEqualityComparer());    
-    
+    private readonly Dictionary<object, object> _cloneCache = new(new ReferenceEqualityComparer());
+    private static readonly ObjectCloneCache CloneFuncCache = new();
+
     private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
     {
         public new bool Equals(object? x, object? y) => ReferenceEquals(x, y);
         public int GetHashCode(object obj) => RuntimeHelpers.GetHashCode(obj);
     }
-    
+
     private static Dictionary<Type, Func<object, object>> InitializeCustomCloners()
     {
         return new Dictionary<Type, Func<object, object>>
@@ -48,7 +49,7 @@ public sealed class ExpressionCloner(ComparisonConfig config)
         if (obj is null) return null;
 
         var type = obj.GetType();
-        
+
         // Check if we've already cloned this object
         if (_cloneCache.TryGetValue(obj, out var existingClone))
         {
@@ -107,9 +108,9 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 
             // Get CreateSafeValue method
             var createSafeValueMethod = typeof(ExpressionCloner).GetMethod(
-                "CreateSafeValue",
-                BindingFlags.NonPublic | BindingFlags.Static) ?? 
-                throw new InvalidOperationException("CreateSafeValue method not found");
+                                            "CreateSafeValue",
+                                            BindingFlags.NonPublic | BindingFlags.Static) ??
+                                        throw new InvalidOperationException("CreateSafeValue method not found");
 
             foreach (var prop in properties)
             {
@@ -266,8 +267,8 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 
         try
         {
-            // Use cached clone function if available
-            var cloneFunc = _cloneCache.GetOrCreateCloneFunc(type);
+            // Use cached clone function from static cache
+            var cloneFunc = CloneFuncCache.GetOrCreateCloneFunc(type);
             var clonedTarget = cloneFunc(source, target, _config);
 
             if (clonedTarget != target)
@@ -361,11 +362,11 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 
         // For reference types, return null with cast to remove nullability warning
         if (!targetType.IsValueType) return null!;
-    
+
         // For non-nullable value types, create a default instance
         try
         {
-            return Activator.CreateInstance(targetType) ?? 
+            return Activator.CreateInstance(targetType) ??
                    throw new InvalidOperationException($"Failed to create instance of type {targetType.Name}");
         }
         catch
@@ -373,8 +374,10 @@ public sealed class ExpressionCloner(ComparisonConfig config)
             var uninitialized = RuntimeHelpers.GetUninitializedObject(targetType);
             if (uninitialized == null)
             {
-                throw new InvalidOperationException($"Failed to create uninitialized instance of type {targetType.Name}");
+                throw new InvalidOperationException(
+                    $"Failed to create uninitialized instance of type {targetType.Name}");
             }
+
             return uninitialized;
         }
     }
