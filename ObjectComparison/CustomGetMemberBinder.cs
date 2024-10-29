@@ -24,7 +24,7 @@ internal class CustomGetMemberBinder : GetMemberBinder
             var valueVar = Expression.Variable(typeof(object));
 
             getExpression = Expression.Block(
-                new[] { valueVar },
+                [valueVar],
                 Expression.Condition(
                     Expression.Call(dictionaryCast, tryGetValue, nameConstant, valueVar),
                     valueVar,
@@ -42,26 +42,26 @@ internal class CustomGetMemberBinder : GetMemberBinder
 
             // Try property first
             var getPropertyMethod =
-                typeof(Type).GetMethod("GetProperty", new[] { typeof(string), typeof(BindingFlags) });
+                typeof(Type).GetMethod("GetProperty", [typeof(string), typeof(BindingFlags)]);
             var propertyInfo = Expression.Call(typeConstant, getPropertyMethod, nameConstant, flagsConstant);
             var propertyValue = Expression.Condition(
                 Expression.NotEqual(propertyInfo, Expression.Constant(null)),
                 Expression.Call(
                     propertyInfo,
-                    typeof(PropertyInfo).GetMethod("GetValue", new[] { typeof(object) }),
+                    typeof(PropertyInfo).GetMethod("GetValue", [typeof(object)]),
                     target.Expression
                 ),
                 Expression.Constant(null)
             );
 
             // Try field if property not found
-            var getFieldMethod = typeof(Type).GetMethod("GetField", new[] { typeof(string), typeof(BindingFlags) });
+            var getFieldMethod = typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)]);
             var fieldInfo = Expression.Call(typeConstant, getFieldMethod, nameConstant, flagsConstant);
             var fieldValue = Expression.Condition(
                 Expression.NotEqual(fieldInfo, Expression.Constant(null)),
                 Expression.Call(
                     fieldInfo,
-                    typeof(FieldInfo).GetMethod("GetValue", new[] { typeof(object) }),
+                    typeof(FieldInfo).GetMethod("GetValue", [typeof(object)]),
                     target.Expression
                 ),
                 Expression.Constant(null)

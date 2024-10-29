@@ -10,7 +10,7 @@ namespace ObjectComparison;
 internal class ExpressionCloner
 {
     private readonly ComparisonConfig _config;
-    private readonly HashSet<object> _clonedObjects = new();
+    private readonly HashSet<object> _clonedObjects = [];
     private readonly Dictionary<Type, Func<object, object>> _customCloners = new();
 
     public ExpressionCloner(ComparisonConfig config)
@@ -117,11 +117,10 @@ internal class ExpressionCloner
             // Try to convert to the original collection type
             try
             {
-                var constructor = type.GetConstructor(new[]
-                    { typeof(IEnumerable<>).MakeGenericType(metadata.ItemType) });
+                var constructor = type.GetConstructor([typeof(IEnumerable<>).MakeGenericType(metadata.ItemType)]);
                 if (constructor != null)
                 {
-                    return constructor.Invoke(new[] { list });
+                    return constructor.Invoke([list]);
                 }
             }
             catch (Exception ex)

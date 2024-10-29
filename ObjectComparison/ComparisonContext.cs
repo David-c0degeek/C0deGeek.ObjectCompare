@@ -8,7 +8,7 @@ namespace ObjectComparison;
 /// </summary>
 internal class ComparisonContext
 {
-    public HashSet<ComparisonPair> ComparedObjects { get; } = new();
+    public HashSet<ComparisonPair> ComparedObjects { get; } = [];
     public int CurrentDepth { get; set; }
     public Stopwatch Timer { get; } = new();
     public int ObjectsCompared { get; set; }

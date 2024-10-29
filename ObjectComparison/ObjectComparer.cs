@@ -281,8 +281,8 @@ namespace ObjectComparison
                 var collection1 = (IEnumerable)obj1;
                 var collection2 = (IEnumerable)obj2;
 
-                var list1 = collection1?.Cast<object>().ToList() ?? new List<object>();
-                var list2 = collection2?.Cast<object>().ToList() ?? new List<object>();
+                var list1 = collection1?.Cast<object>().ToList() ?? [];
+                var list2 = collection2?.Cast<object>().ToList() ?? [];
 
                 if (list1.Count != list2.Count)
                 {

@@ -26,7 +26,7 @@ public class ComparisonConfig
     /// <summary>
     /// Properties to exclude from comparison
     /// </summary>
-    public HashSet<string> ExcludedProperties { get; set; } = new();
+    public HashSet<string> ExcludedProperties { get; set; } = [];
 
     /// <summary>
     /// Custom comparers for specific types

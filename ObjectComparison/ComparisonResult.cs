@@ -13,7 +13,7 @@ public class ComparisonResult
     /// <summary>
     /// List of differences found during comparison
     /// </summary>
-    public List<string> Differences { get; set; } = new();
+    public List<string> Differences { get; set; } = [];
 
     /// <summary>
     /// The path where comparison stopped (if max depth was reached)
@@ -43,5 +43,5 @@ public class ComparisonResult
     /// <summary>
     /// Collection of property paths that were different
     /// </summary>
-    public HashSet<string> DifferentPaths { get; } = new();
+    public HashSet<string> DifferentPaths { get; } = [];
 }

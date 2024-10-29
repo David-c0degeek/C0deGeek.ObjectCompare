@@ -68,7 +68,7 @@ internal static class CollectionHandling
         {
             var clonedKey = elementCloner(entry.Key);
             var clonedValue = elementCloner(entry.Value);
-            addMethod.Invoke(dict, new[] { clonedKey, clonedValue });
+            addMethod.Invoke(dict, [clonedKey, clonedValue]);
         }
 
         return dict;
@@ -85,7 +85,7 @@ internal static class CollectionHandling
         foreach (var item in source)
         {
             var clonedItem = elementCloner(item);
-            addMethod.Invoke(set, new[] { clonedItem });
+            addMethod.Invoke(set, [clonedItem]);
         }
 
         return set;
@@ -105,7 +105,7 @@ internal static class CollectionHandling
 
             foreach (var item in items)
             {
-                enqueueMethod.Invoke(queue, new[] { item });
+                enqueueMethod.Invoke(queue, [item]);
             }
 
             return queue;
@@ -119,7 +119,7 @@ internal static class CollectionHandling
             // Push in reverse order to maintain original order
             foreach (var item in items.AsEnumerable().Reverse())
             {
-                pushMethod.Invoke(stack, new[] { item });
+                pushMethod.Invoke(stack, [item]);
             }
 
             return stack;
@@ -137,7 +137,7 @@ internal static class CollectionHandling
         foreach (var item in source)
         {
             var clonedItem = elementCloner(item);
-            addMethod.Invoke(list, new[] { clonedItem });
+            addMethod.Invoke(list, [clonedItem]);
         }
 
         // If the original type was a List<T>, return as is
@@ -150,11 +150,11 @@ internal static class CollectionHandling
         try
         {
             var constructor = collectionType.GetConstructor(
-                new[] { typeof(IEnumerable<>).MakeGenericType(elementType) });
+                [typeof(IEnumerable<>).MakeGenericType(elementType)]);
 
             if (constructor != null)
             {
-                return constructor.Invoke(new[] { list });
+                return constructor.Invoke([list]);
             }
         }
         catch

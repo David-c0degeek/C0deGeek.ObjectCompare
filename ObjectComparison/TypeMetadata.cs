@@ -55,7 +55,7 @@ internal class TypeMetadata
 
     private static Func<object, object, bool> CreateEqualityComparer(Type type)
     {
-        var method = type.GetMethod("Equals", new[] { type });
+        var method = type.GetMethod("Equals", [type]);
         if (method == null) return null;
 
         var param1 = Expression.Parameter(typeof(object), "x");
@@ -75,7 +75,7 @@ internal class TypeMetadata
         }
 
         var enumType = type.GetInterfaces()
-            .Concat(new[] { type })
+            .Concat([type])
             .FirstOrDefault(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 
         return enumType?.GetGenericArguments()[0];
