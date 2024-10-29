@@ -4,77 +4,112 @@ using System.Reflection;
 
 namespace ObjectComparison;
 
-internal class CustomGetMemberBinder(string name) : GetMemberBinder(name, true)
+internal sealed class CustomGetMemberBinder : GetMemberBinder
 {
-    public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject errorSuggestion)
+    public CustomGetMemberBinder(string name) : base(name, ignoreCase: true)
     {
-        // Create the expression that will get the member value
-        Expression getExpression;
+        ArgumentException.ThrowIfNullOrEmpty(name);
+    }
 
-        if (target.LimitType == typeof(IDictionary<string, object>))
-        {
-            // For ExpandoObject (implements IDictionary<string, object>)
-            var dictionaryCast = Expression.Convert(target.Expression, typeof(IDictionary<string, object>));
-            var nameConstant = Expression.Constant(Name);
-            var tryGetValue = typeof(IDictionary<string, object>).GetMethod("TryGetValue");
-            var valueVar = Expression.Variable(typeof(object));
+    public override DynamicMetaObject FallbackGetMember(DynamicMetaObject target, DynamicMetaObject? errorSuggestion)
+    {
+        ArgumentNullException.ThrowIfNull(target);
 
-            getExpression = Expression.Block(
-                [valueVar],
-                Expression.Condition(
-                    Expression.Call(dictionaryCast, tryGetValue, nameConstant, valueVar),
-                    valueVar,
-                    Expression.Constant(null)
-                )
-            );
-        }
-        else
-        {
-            // For other dynamic objects, try to get property or field value using reflection
-            var typeConstant = Expression.Constant(target.LimitType);
-            var nameConstant = Expression.Constant(Name);
-            var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-            var flagsConstant = Expression.Constant(bindingFlags);
+        var expression = CreateMemberAccessExpression(target);
+        var restrictions = target.Restrictions.Merge(
+            BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType));
 
-            // Try property first
-            var getPropertyMethod =
-                typeof(Type).GetMethod("GetProperty", [typeof(string), typeof(BindingFlags)]);
-            var propertyInfo = Expression.Call(typeConstant, getPropertyMethod, nameConstant, flagsConstant);
-            var propertyValue = Expression.Condition(
-                Expression.NotEqual(propertyInfo, Expression.Constant(null)),
-                Expression.Call(
-                    propertyInfo,
-                    typeof(PropertyInfo).GetMethod("GetValue", [typeof(object)]),
-                    target.Expression
-                ),
-                Expression.Constant(null)
-            );
+        return new DynamicMetaObject(expression, restrictions);
+    }
 
-            // Try field if property not found
-            var getFieldMethod = typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)]);
-            var fieldInfo = Expression.Call(typeConstant, getFieldMethod, nameConstant, flagsConstant);
-            var fieldValue = Expression.Condition(
-                Expression.NotEqual(fieldInfo, Expression.Constant(null)),
-                Expression.Call(
-                    fieldInfo,
-                    typeof(FieldInfo).GetMethod("GetValue", [typeof(object)]),
-                    target.Expression
-                ),
-                Expression.Constant(null)
-            );
+    private Expression CreateMemberAccessExpression(DynamicMetaObject target)
+    {
+        return target.LimitType == typeof(IDictionary<string, object>) 
+            ? CreateDictionaryAccess(target) 
+            : CreateReflectionAccess(target);
+    }
 
-            // Combine property and field checks
-            getExpression = Expression.Condition(
-                Expression.NotEqual(propertyInfo, Expression.Constant(null)),
-                propertyValue,
-                fieldValue
-            );
-        }
+    private Expression CreateDictionaryAccess(DynamicMetaObject target)
+    {
+        var dictionaryCast = Expression.Convert(target.Expression, typeof(IDictionary<string, object>));
+        var nameConstant = Expression.Constant(Name);
+        var tryGetValue = typeof(IDictionary<string, object>).GetMethod("TryGetValue")!;
+        var valueVar = Expression.Variable(typeof(object));
 
-        // Return a new DynamicMetaObject with the member access expression
-        return new DynamicMetaObject(
-            getExpression,
-            target.Restrictions.Merge(BindingRestrictions.GetTypeRestriction(target.Expression, target.LimitType))
+        return Expression.Block(
+            new[] { valueVar },
+            Expression.Condition(
+                Expression.Call(dictionaryCast, tryGetValue, nameConstant, valueVar),
+                valueVar,
+                Expression.Constant(null, typeof(object))
+            )
         );
+    }
+
+    private Expression CreateReflectionAccess(DynamicMetaObject target)
+    {
+        var typeConstant = Expression.Constant(target.LimitType);
+        var nameConstant = Expression.Constant(Name);
+        const BindingFlags bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        var flagsConstant = Expression.Constant(bindingFlags);
+
+        // Property access
+        var propertyAccess = CreatePropertyAccess(target, typeConstant, nameConstant, flagsConstant);
+        
+        // Field access
+        var fieldAccess = CreateFieldAccess(target, typeConstant, nameConstant, flagsConstant);
+
+        // Combine property and field access
+        return Expression.Condition(
+            Expression.NotEqual(propertyAccess.Info, Expression.Constant(null)),
+            propertyAccess.Value,
+            fieldAccess.Value
+        );
+    }
+
+    private static (Expression Info, Expression Value) CreatePropertyAccess(
+        DynamicMetaObject target,
+        ConstantExpression typeConstant,
+        ConstantExpression nameConstant,
+        ConstantExpression flagsConstant)
+    {
+        var getPropertyMethod = typeof(Type).GetMethod("GetProperty", [typeof(string), typeof(BindingFlags)])!;
+        var propertyInfo = Expression.Call(typeConstant, getPropertyMethod, nameConstant, flagsConstant);
+        
+        var getValue = typeof(PropertyInfo).GetMethod("GetValue", [typeof(object)])!;
+        var propertyValue = Expression.Condition(
+            Expression.NotEqual(propertyInfo, Expression.Constant(null)),
+            Expression.Call(
+                propertyInfo,
+                getValue,
+                target.Expression
+            ),
+            Expression.Constant(null, typeof(object))
+        );
+
+        return (propertyInfo, propertyValue);
+    }
+
+    private static (Expression Info, Expression Value) CreateFieldAccess(
+        DynamicMetaObject target,
+        ConstantExpression typeConstant,
+        ConstantExpression nameConstant,
+        ConstantExpression flagsConstant)
+    {
+        var getFieldMethod = typeof(Type).GetMethod("GetField", [typeof(string), typeof(BindingFlags)])!;
+        var fieldInfo = Expression.Call(typeConstant, getFieldMethod, nameConstant, flagsConstant);
+        
+        var getValue = typeof(FieldInfo).GetMethod("GetValue", [typeof(object)])!;
+        var fieldValue = Expression.Condition(
+            Expression.NotEqual(fieldInfo, Expression.Constant(null)),
+            Expression.Call(
+                fieldInfo,
+                getValue,
+                target.Expression
+            ),
+            Expression.Constant(null, typeof(object))
+        );
+
+        return (fieldInfo, fieldValue);
     }
 }
