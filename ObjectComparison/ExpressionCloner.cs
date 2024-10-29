@@ -13,7 +13,7 @@ public sealed class ExpressionCloner(ComparisonConfig config)
     private readonly HashSet<object> _clonedObjects = [];
     private readonly Dictionary<Type, Func<object, object>> _customCloners = InitializeCustomCloners();
     private readonly ObjectCloneCache _cloneCache = new();
-
+    
     private static Dictionary<Type, Func<object, object>> InitializeCustomCloners()
     {
         return new Dictionary<Type, Func<object, object>>
@@ -93,27 +93,34 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 
             var assignments = new List<Expression>();
 
+            // Get CreateSafeValue method
+            var createSafeValueMethod = typeof(ExpressionCloner).GetMethod(
+                "CreateSafeValue",
+                BindingFlags.NonPublic | BindingFlags.Static) ?? 
+                throw new InvalidOperationException("CreateSafeValue method not found");
+
             foreach (var prop in properties)
             {
                 var propAccess = Expression.Property(typedSource, prop);
                 var targetPropAccess = Expression.Property(typedTarget, prop);
 
-                // Create a safe value expression
-                var createSafeValueMethod = typeof(ExpressionCloner).GetMethod(
-                    "CreateSafeValue",
-                    BindingFlags.NonPublic | BindingFlags.Static);
-
+                // Create a safe value expression with null check
                 var safeValueExpression = Expression.Call(
                     createSafeValueMethod,
                     propAccess,
-                    Expression.Constant(prop.PropertyType));
+                    Expression.Constant(prop.PropertyType, typeof(Type)));
 
-                assignments.Add(
-                    Expression.Assign(
-                        targetPropAccess,
+                // Convert the result to the property type with null check
+                var convertedValue = Expression.Convert(
+                    Expression.Condition(
+                        Expression.Equal(safeValueExpression, Expression.Constant(null)),
+                        Expression.Default(prop.PropertyType),
                         Expression.Convert(safeValueExpression, prop.PropertyType)
-                    )
+                    ),
+                    prop.PropertyType
                 );
+
+                assignments.Add(Expression.Assign(targetPropAccess, convertedValue));
             }
 
             assignments.Add(targetParam);
@@ -321,30 +328,28 @@ public sealed class ExpressionCloner(ComparisonConfig config)
 
     private static object? CreateSafeValue(object? value, Type targetType)
     {
+        ArgumentNullException.ThrowIfNull(targetType);
+
         if (value != null) return value;
 
         // Handle nullable value types
         var nullableUnderlyingType = Nullable.GetUnderlyingType(targetType);
         if (nullableUnderlyingType != null)
         {
-            // For nullable types, null is a valid value
             return null;
         }
 
-        // For non-nullable value types, create a default instance
+        // For reference types, return null
         if (!targetType.IsValueType) return null;
-
+        
+        // For non-nullable value types, create a default instance
         try
         {
             return Activator.CreateInstance(targetType);
         }
         catch
         {
-            // If we can't create an instance, fall back to the default value
             return RuntimeHelpers.GetUninitializedObject(targetType);
         }
-
-        // For reference types, null is acceptable
-        return null;
     }
 }
