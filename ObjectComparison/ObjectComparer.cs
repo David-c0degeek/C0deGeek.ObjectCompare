@@ -18,18 +18,12 @@ namespace ObjectComparison
             _cloner = new ExpressionCloner(_config);
         }
 
-        /// <summary>
-        /// Takes a snapshot of an object for later comparison
-        /// </summary>
-        public T TakeSnapshot<T>(T obj)
+        public T? TakeSnapshot<T>(T? obj)
         {
             return _cloner.Clone(obj);
         }
 
-        /// <summary>
-        /// Compares two objects and returns detailed results
-        /// </summary>
-        public ComparisonResult Compare<T>(T obj1, T obj2)
+        public ComparisonResult Compare<T>(T? obj1, T? obj2)
         {
             var context = new ComparisonContext();
             var result = new ComparisonResult();
@@ -53,20 +47,23 @@ namespace ObjectComparison
 
             return result;
         }
-    }
 
-    public partial class ObjectComparer
-    {
-        private void CompareObjectsIterative(object obj1, object obj2, string path,
+        private void CompareObjectsIterative(object? obj1, object? obj2, string path,
             ComparisonResult result, ComparisonContext context)
         {
-            var stack = new Stack<(object, object, string, int)>();
+            ArgumentNullException.ThrowIfNull(result);
+            ArgumentNullException.ThrowIfNull(context);
+
+            var stack = new Stack<(object? Obj1, object? Obj2, string Path, int Depth)>();
             stack.Push((obj1, obj2, path, 0));
 
             while (stack.Count > 0 && context.ObjectsCompared < _config.MaxObjectCount)
             {
                 var (current1, current2, currentPath, depth) = stack.Pop();
-                context.PushObject(current1);
+                if (current1 != null)
+                {
+                    context.PushObject(current1);
+                }
 
                 try
                 {
@@ -82,10 +79,15 @@ namespace ObjectComparison
                     }
 
                     var type = current1?.GetType() ?? current2?.GetType();
+                    if (type == null) continue;
+
                     var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
 
                     // Handle circular references
-                    var pair = new ComparisonContext.ComparisonPair(current1, current2);
+                    var pair = new ComparisonContext.ComparisonPair(
+                        current1 ?? throw new InvalidOperationException("Unexpected null value"),
+                        current2 ?? throw new InvalidOperationException("Unexpected null value"));
+
                     if (!context.ComparedObjects.Add(pair))
                     {
                         continue;
@@ -116,7 +118,10 @@ namespace ObjectComparison
                 }
                 finally
                 {
-                    context.PopObject();
+                    if (current1 != null)
+                    {
+                        context.PopObject();
+                    }
                 }
             }
 
@@ -128,11 +133,13 @@ namespace ObjectComparison
             }
         }
 
-        private bool HandleNulls(object obj1, object obj2, string path, ComparisonResult result)
+        private bool HandleNulls(object? obj1, object? obj2, string path, ComparisonResult result)
         {
+            ArgumentNullException.ThrowIfNull(result);
+
             if (ReferenceEquals(obj1, obj2)) return true;
 
-            if (obj1 == null || obj2 == null)
+            if (obj1 is null || obj2 is null)
             {
                 if (_config.NullValueHandling == NullHandling.Loose && IsEmpty(obj1) && IsEmpty(obj2))
                 {
@@ -147,11 +154,21 @@ namespace ObjectComparison
             return false;
         }
 
-        private void HandleCustomComparison(ICustomComparer comparer, object obj1, object obj2,
+        private void HandleCustomComparison(ICustomComparer comparer, object? obj1, object? obj2,
             string path, ComparisonResult result)
         {
+            ArgumentNullException.ThrowIfNull(comparer);
+            ArgumentNullException.ThrowIfNull(result);
+
             try
             {
+                if (obj1 == null || obj2 == null)
+                {
+                    result.Differences.Add($"Custom comparison failed at {path}: one or both objects are null");
+                    result.AreEqual = false;
+                    return;
+                }
+
                 if (!comparer.AreEqual(obj1, obj2, _config))
                 {
                     result.Differences.Add($"Custom comparison failed at {path}");
@@ -164,9 +181,12 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareNullableTypes(object obj1, object obj2, string path,
+        private void CompareNullableTypes(object? obj1, object? obj2, string path,
             ComparisonResult result, TypeMetadata metadata)
         {
+            ArgumentNullException.ThrowIfNull(result);
+            ArgumentNullException.ThrowIfNull(metadata);
+
             try
             {
                 var value1 = obj1 != null ? TypeCache.GetPropertyGetter(obj1.GetType(), "Value")(obj1) : null;
@@ -178,7 +198,7 @@ namespace ObjectComparison
                     return;
                 }
 
-                if (metadata.HasCustomEquality && metadata.EqualityComparer != null)
+                if (metadata is { HasCustomEquality: true, EqualityComparer: not null })
                 {
                     if (!metadata.EqualityComparer(value1, value2))
                     {
@@ -201,47 +221,10 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareSimpleTypes(object obj1, object obj2, string path,
-            ComparisonResult result, TypeMetadata metadata)
-        {
-            if (metadata.HasCustomEquality && metadata.EqualityComparer != null)
-            {
-                if (!metadata.EqualityComparer(obj1, obj2))
-                {
-                    result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
-                    result.AreEqual = false;
-                }
-
-                return;
-            }
-
-            if (obj1 is decimal dec1 && obj2 is decimal dec2)
-            {
-                CompareDecimals(dec1, dec2, path, result);
-                return;
-            }
-
-            if (obj1 is float f1 && obj2 is float f2)
-            {
-                CompareFloats(f1, f2, path, result);
-                return;
-            }
-
-            if (obj1 is double d1 && obj2 is double d2)
-            {
-                CompareDoubles(d1, d2, path, result);
-                return;
-            }
-
-            if (!obj1.Equals(obj2))
-            {
-                result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
-                result.AreEqual = false;
-            }
-        }
-
         private void CompareDecimals(decimal? dec1, decimal? dec2, string path, ComparisonResult result)
         {
+            ArgumentNullException.ThrowIfNull(result);
+
             var value1 = dec1 ?? 0m;
             var value2 = dec2 ?? 0m;
             var rounded1 = Math.Round(value1, _config.DecimalPrecision);
@@ -254,35 +237,191 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareFloats(float f1, float f2, string path, ComparisonResult result)
+        private void CompareComplexObjects(object? obj1, object? obj2, string path,
+            ComparisonResult result, TypeMetadata metadata,
+            Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack, int depth)
         {
-            if (Math.Abs(f1 - f2) > float.Epsilon)
+            if (obj1 == null || obj2 == null)
             {
-                result.Differences.Add($"Float difference at {path}: {f1} != {f2}");
+                result.Differences.Add($"Null object in complex comparison at {path}");
+                result.AreEqual = false;
+                return;
+            }
+
+            // Compare properties
+            foreach (var prop in metadata.Properties)
+            {
+                if (!ShouldCompareProperty(prop)) continue;
+
+                try
+                {
+                    var getter = TypeCache.GetPropertyGetter(obj1.GetType(), prop.Name);
+                    var value1 = getter(obj1);
+                    var value2 = getter(obj2);
+
+                    if (_config.DeepComparison)
+                    {
+                        stack.Push((value1, value2, $"{path}.{prop.Name}", depth + 1));
+                    }
+                    else if (!AreValuesEqual(value1, value2))
+                    {
+                        result.Differences.Add($"Property difference at {path}.{prop.Name}");
+                        result.AreEqual = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _config.Logger?.LogWarning(ex, "Failed to compare property {Property} at {Path}", prop.Name, path);
+                    throw new ComparisonException($"Error comparing property {prop.Name}", path, ex);
+                }
+            }
+
+            if (_config.ComparePrivateFields)
+            {
+                CompareFields(obj1, obj2, path, result, metadata, stack, depth);
+            }
+        }
+
+        private void CompareFields(object obj1, object obj2, string path,
+            ComparisonResult result, TypeMetadata metadata,
+            Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack, int depth)
+        {
+            foreach (var field in metadata.Fields)
+            {
+                if (_config.ExcludedProperties.Contains(field.Name)) continue;
+
+                try
+                {
+                    var value1 = field.GetValue(obj1);
+                    var value2 = field.GetValue(obj2);
+
+                    if (_config.DeepComparison)
+                    {
+                        stack.Push((value1, value2, $"{path}.{field.Name}", depth + 1));
+                    }
+                    else if (!AreValuesEqual(value1, value2))
+                    {
+                        result.Differences.Add($"Field difference at {path}.{field.Name}");
+                        result.AreEqual = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _config.Logger?.LogWarning(ex, "Failed to compare field {Field} at {Path}", field.Name, path);
+                    throw new ComparisonException($"Error comparing field {field.Name}", path, ex);
+                }
+            }
+        }
+
+        private bool AreValuesEqual(object? value1, object? value2)
+        {
+            if (ReferenceEquals(value1, value2)) return true;
+            if (value1 == null || value2 == null) return false;
+            return value1.Equals(value2);
+        }
+
+        private bool IsEmpty(object? obj)
+        {
+            if (obj == null) return true;
+            if (obj is string str) return string.IsNullOrEmpty(str);
+            if (obj is IEnumerable enumerable) return !enumerable.Cast<object>().Any();
+            return false;
+        }
+
+        private sealed class FastEqualityComparer : IEqualityComparer<object>
+        {
+            public new bool Equals(object? x, object? y)
+            {
+                if (ReferenceEquals(x, y)) return true;
+                if (x == null || y == null) return false;
+                return x.Equals(y);
+            }
+
+            public int GetHashCode(object obj)
+            {
+                return obj?.GetHashCode() ?? 0;
+            }
+        }
+
+        private void CompareSimpleTypes(object obj1, object obj2, string path,
+            ComparisonResult result, TypeMetadata metadata)
+        {
+            ArgumentNullException.ThrowIfNull(obj1);
+            ArgumentNullException.ThrowIfNull(obj2);
+            ArgumentNullException.ThrowIfNull(result);
+            ArgumentNullException.ThrowIfNull(metadata);
+
+            if (metadata is { HasCustomEquality: true, EqualityComparer: not null })
+            {
+                try
+                {
+                    if (!metadata.EqualityComparer(obj1, obj2))
+                    {
+                        result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
+                        result.AreEqual = false;
+                    }
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    throw new ComparisonException($"Custom equality comparison failed at {path}", path, ex);
+                }
+            }
+
+            if (obj1 is decimal dec1 && obj2 is decimal dec2)
+            {
+                CompareDecimals(dec1, dec2, path, result);
+                return;
+            }
+
+            if (obj1 is float f1 && obj2 is float f2)
+            {
+                if (!NumericComparison.AreFloatingPointEqual(f1, f2, _config))
+                {
+                    result.Differences.Add($"Float difference at {path}: {f1} != {f2}");
+                    result.AreEqual = false;
+                }
+
+                return;
+            }
+
+            if (obj1 is double d1 && obj2 is double d2)
+            {
+                if (!NumericComparison.AreFloatingPointEqual(d1, d2, _config))
+                {
+                    result.Differences.Add($"Double difference at {path}: {d1} != {d2}");
+                    result.AreEqual = false;
+                }
+
+                return;
+            }
+
+            if (!obj1.Equals(obj2))
+            {
+                result.Differences.Add($"Value difference at {path}: {obj1} != {obj2}");
                 result.AreEqual = false;
             }
         }
 
-        private void CompareDoubles(double d1, double d2, string path, ComparisonResult result)
-        {
-            if (Math.Abs(d1 - d2) > double.Epsilon)
-            {
-                result.Differences.Add($"Double difference at {path}: {d1} != {d2}");
-                result.AreEqual = false;
-            }
-        }
-
-        private void CompareCollections(object obj1, object obj2, string path,
-            ComparisonResult result, Stack<(object, object, string, int)> stack,
+        private void CompareCollections(object? obj1, object? obj2, string path,
+            ComparisonResult result, Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack,
             int depth, TypeMetadata metadata)
         {
+            if (obj1 == null || obj2 == null)
+            {
+                result.Differences.Add($"Null collection at {path}");
+                result.AreEqual = false;
+                return;
+            }
+
             try
             {
                 var collection1 = (IEnumerable)obj1;
                 var collection2 = (IEnumerable)obj2;
 
-                var list1 = collection1?.Cast<object>().ToList() ?? [];
-                var list2 = collection2?.Cast<object>().ToList() ?? [];
+                var list1 = collection1.Cast<object>().ToList();
+                var list2 = collection2.Cast<object>().ToList();
 
                 if (list1.Count != list2.Count)
                 {
@@ -292,17 +431,21 @@ namespace ObjectComparison
                 }
 
                 // Check if we have a custom comparer for the collection items
-                var hasCustomItemComparer = _config.CollectionItemComparers.TryGetValue(
-                    metadata.ItemType ?? typeof(object),
-                    out var itemComparer);
-
-                if (_config.IgnoreCollectionOrder)
+                if (metadata.ItemType != null &&
+                    _config.CollectionItemComparers.TryGetValue(metadata.ItemType, out var itemComparer))
                 {
-                    if (hasCustomItemComparer)
+                    if (_config.IgnoreCollectionOrder)
                     {
                         CompareUnorderedCollectionsWithComparer(list1, list2, path, result, itemComparer);
                     }
-                    else if (metadata.ItemType != null && IsSimpleType(metadata.ItemType))
+                    else
+                    {
+                        CompareOrderedCollectionsWithComparer(list1, list2, path, result, itemComparer);
+                    }
+                }
+                else if (_config.IgnoreCollectionOrder)
+                {
+                    if (metadata.ItemType != null && IsSimpleType(metadata.ItemType))
                     {
                         CompareUnorderedCollectionsFast(list1, list2, path, result);
                     }
@@ -313,14 +456,7 @@ namespace ObjectComparison
                 }
                 else
                 {
-                    if (hasCustomItemComparer)
-                    {
-                        CompareOrderedCollectionsWithComparer(list1, list2, path, result, itemComparer);
-                    }
-                    else
-                    {
-                        CompareOrderedCollections(list1, list2, path, result, stack, depth);
-                    }
+                    CompareOrderedCollections(list1, list2, path, result, stack, depth);
                 }
             }
             catch (Exception ex)
@@ -388,7 +524,8 @@ namespace ObjectComparison
         }
 
         private void CompareUnorderedCollectionsSlow(List<object> list1, List<object> list2,
-            string path, ComparisonResult result, Stack<(object, object, string, int)> stack, int depth)
+            string path, ComparisonResult result,
+            Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack, int depth)
         {
             var matched = new bool[list2.Count];
 
@@ -402,14 +539,7 @@ namespace ObjectComparison
                     if (matched[j]) continue;
 
                     var tempResult = new ComparisonResult();
-                    var tempStack = new Stack<(object, object, string, int)>();
-                    tempStack.Push((item1, list2[j], $"{path}[{i}]", depth + 1));
-
-                    while (tempStack.Count > 0)
-                    {
-                        var (tempObj1, tempObj2, tempPath, tempDepth) = tempStack.Pop();
-                        CompareObjectsIterative(tempObj1, tempObj2, tempPath, tempResult, new ComparisonContext());
-                    }
+                    CompareObjectsIterative(item1, list2[j], $"{path}[{i}]", tempResult, new ComparisonContext());
 
                     if (tempResult.AreEqual)
                     {
@@ -433,17 +563,17 @@ namespace ObjectComparison
         {
             for (var i = 0; i < list1.Count; i++)
             {
-                if (!itemComparer.Equals(list1[i], list2[i]))
-                {
-                    result.Differences.Add($"Collection items differ at {path}[{i}]");
-                    result.AreEqual = false;
-                    return;
-                }
+                if (itemComparer.Equals(list1[i], list2[i])) continue;
+                
+                result.Differences.Add($"Collection items differ at {path}[{i}]");
+                result.AreEqual = false;
+                return;
             }
         }
 
         private void CompareOrderedCollections(List<object> list1, List<object> list2,
-            string path, ComparisonResult result, Stack<(object, object, string, int)> stack, int depth)
+            string path, ComparisonResult result,
+            Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack, int depth)
         {
             for (var i = 0; i < list1.Count; i++)
             {
@@ -451,109 +581,20 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareComplexObjects(object obj1, object obj2, string path,
-            ComparisonResult result, TypeMetadata metadata, Stack<(object, object, string, int)> stack, int depth)
-        {
-            // Compare properties
-            foreach (var prop in metadata.Properties)
-            {
-                if (!ShouldCompareProperty(prop)) continue;
-
-                try
-                {
-                    var getter = TypeCache.GetPropertyGetter(obj1.GetType(), prop.Name);
-                    var value1 = getter(obj1);
-                    var value2 = getter(obj2);
-
-                    if (_config.DeepComparison)
-                    {
-                        stack.Push((value1, value2, $"{path}.{prop.Name}", depth + 1));
-                    }
-                    else if (!AreValuesEqual(value1, value2))
-                    {
-                        result.Differences.Add($"Property difference at {path}.{prop.Name}");
-                        result.AreEqual = false;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _config.Logger?.LogWarning(ex, "Failed to compare property {Property} at {Path}", prop.Name, path);
-                    throw new ComparisonException($"Error comparing property {prop.Name}", path, ex);
-                }
-            }
-
-            // Compare fields if configured
-            if (_config.ComparePrivateFields)
-            {
-                foreach (var field in metadata.Fields)
-                {
-                    if (_config.ExcludedProperties.Contains(field.Name)) continue;
-
-                    try
-                    {
-                        var value1 = field.GetValue(obj1);
-                        var value2 = field.GetValue(obj2);
-
-                        if (_config.DeepComparison)
-                        {
-                            stack.Push((value1, value2, $"{path}.{field.Name}", depth + 1));
-                        }
-                        else if (!AreValuesEqual(value1, value2))
-                        {
-                            result.Differences.Add($"Field difference at {path}.{field.Name}");
-                            result.AreEqual = false;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _config.Logger?.LogWarning(ex, "Failed to compare field {Field} at {Path}", field.Name, path);
-                        throw new ComparisonException($"Error comparing field {field.Name}", path, ex);
-                    }
-                }
-            }
-        }
-
         private bool ShouldCompareProperty(PropertyInfo prop)
         {
+            ArgumentNullException.ThrowIfNull(prop);
+
             if (_config.ExcludedProperties.Contains(prop.Name)) return false;
             if (!prop.CanRead) return false;
             if (!_config.CompareReadOnlyProperties && !prop.CanWrite) return false;
             return true;
         }
 
-        private bool AreValuesEqual(object value1, object value2)
-        {
-            if (ReferenceEquals(value1, value2)) return true;
-            if (value1 == null || value2 == null) return false;
-            return value1.Equals(value2);
-        }
-
-        private bool IsEmpty(object obj)
-        {
-            if (obj == null) return true;
-            if (obj is string str) return string.IsNullOrEmpty(str);
-            if (obj is IEnumerable enumerable) return !enumerable.Cast<object>().Any();
-            return false;
-        }
-
         private bool IsSimpleType(Type type)
         {
+            ArgumentNullException.ThrowIfNull(type);
             return TypeCache.GetMetadata(type, _config.UseCachedMetadata).IsSimpleType;
-        }
-
-        private class FastEqualityComparer : IEqualityComparer<object>
-        {
-            public new bool Equals(object x, object y)
-            {
-                if (ReferenceEquals(x, y)) return true;
-                if (x == null || y == null) return false;
-                return x.Equals(y);
-            }
-
-            public int GetHashCode(object obj)
-            {
-                return obj?.GetHashCode() ?? 0;
-            }
         }
     }
 }

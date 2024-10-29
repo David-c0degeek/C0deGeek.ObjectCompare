@@ -1,15 +1,13 @@
 ﻿using System.Collections;
 using System.Collections.Concurrent;
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace ObjectComparison;
 
-/// <summary>
-/// Advanced cloning functionality using expression trees
-/// </summary>
-internal sealed class ExpressionCloner(ComparisonConfig config)
+public sealed class ExpressionCloner(ComparisonConfig config)
 {
     private readonly ComparisonConfig _config = config ?? throw new ArgumentNullException(nameof(config));
     private readonly HashSet<object> _clonedObjects = [];
@@ -41,7 +39,7 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
         return (T)CloneObject(obj)!;
     }
 
-    private object? CloneObject(object obj)
+    private object? CloneObject(object? obj)
     {
         if (obj is null) return null;
 
@@ -64,7 +62,7 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
         try
         {
             return metadata.IsCollection
-                ? CloneCollection(obj, type, metadata)
+                ? CloneCollection(obj, type)
                 : CloneComplexObject(obj, type, metadata);
         }
         finally
@@ -84,13 +82,28 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
 
         private static Func<object, object> CreateCloneExpression(Type type)
         {
-            // Implementation details for creating clone expression
-            // This would use expression trees to create efficient clone functions
-            throw new NotImplementedException("Clone expression creation to be implemented");
+            var parameter = Expression.Parameter(typeof(object), "obj");
+            var convertedParameter = Expression.Convert(parameter, type);
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+            var bindings = properties
+                .Where(p => p is { CanRead: true, CanWrite: true })
+                .Select(p => Expression.Bind(
+                    p,
+                    Expression.Property(convertedParameter, p)
+                ));
+
+            var memberInit = Expression.MemberInit(
+                Expression.New(type),
+                bindings
+            );
+
+            var convertedResult = Expression.Convert(memberInit, typeof(object));
+            return Expression.Lambda<Func<object, object>>(convertedResult, parameter).Compile();
         }
     }
 
-    private object CloneCollection(object obj, Type type, TypeMetadata metadata)
+    private object CloneCollection(object obj, Type type)
     {
         if (obj is not IEnumerable enumerable)
         {
@@ -104,6 +117,7 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
         }
 
         // Handle generic collections
+        var metadata = TypeCache.GetMetadata(type, _config.UseCachedMetadata);
         if (metadata.ItemType is not null)
         {
             return CloneGenericCollection(enumerable, type, metadata.ItemType);
@@ -116,14 +130,15 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
     private object CloneArray(IEnumerable source, Type arrayType)
     {
         var elementType = arrayType.GetElementType() ?? 
-            throw new ArgumentException($"Could not get element type for array type {arrayType.Name}");
+                          throw new ArgumentException($"Could not get element type for array type {arrayType.Name}");
         
         var sourceArray = source.Cast<object>().ToArray();
         var array = Array.CreateInstance(elementType, sourceArray.Length);
 
         for (var i = 0; i < sourceArray.Length; i++)
         {
-            array.SetValue(CloneObject(sourceArray[i]), i);
+            var clonedElement = CloneObject(sourceArray[i]);
+            array.SetValue(clonedElement, i);
         }
 
         return array;
@@ -180,52 +195,8 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
             throw new ComparisonException($"Failed to create instance of type {type.Name}");
         }
 
-        foreach (var prop in metadata.Properties)
-        {
-            if (!prop.CanWrite) continue;
-            if (_config.ExcludedProperties.Contains(prop.Name)) continue;
-
-            try
-            {
-                var getter = TypeCache.GetPropertyGetter(type, prop.Name);
-                var setter = TypeCache.GetPropertySetter(type, prop.Name);
-                var value = getter(obj);
-                var clonedValue = CloneObject(value);
-                setter(clone, clonedValue);
-            }
-            catch (Exception ex)
-            {
-                _config.Logger?.LogWarning(ex, "Failed to clone property {Property} of type {Type}",
-                    prop.Name, type.Name);
-            }
-        }
-
-        if (_config.ComparePrivateFields)
-        {
-            CloneFields(obj, clone, metadata);
-        }
-
+        CloneObjectProperties(obj, clone);
         return clone;
-    }
-
-    private void CloneFields(object source, object target, TypeMetadata metadata)
-    {
-        foreach (var field in metadata.Fields)
-        {
-            if (_config.ExcludedProperties.Contains(field.Name)) continue;
-
-            try
-            {
-                var value = field.GetValue(source);
-                var clonedValue = CloneObject(value);
-                field.SetValue(target, clonedValue);
-            }
-            catch (Exception ex)
-            {
-                _config.Logger?.LogWarning(ex, "Failed to clone field {Field} of type {Type}",
-                    field.Name, source.GetType().Name);
-            }
-        }
     }
 
     private static object? CreateInstance(Type type)
@@ -234,10 +205,13 @@ internal sealed class ExpressionCloner(ComparisonConfig config)
         {
             // Try to get the parameterless constructor
             var constructor = type.GetConstructor(Type.EmptyTypes);
-            return constructor is not null
-                ? Activator.CreateInstance(type)
-                // If no parameterless constructor exists, use alternative instantiation
-                : RuntimeHelpers.GetUninitializedObject(type);
+            if (constructor is not null)
+            {
+                return Activator.CreateInstance(type);
+            }
+
+            // If no parameterless constructor exists, use alternative instantiation
+            return RuntimeHelpers.GetUninitializedObject(type);
         }
         catch (Exception ex)
         {
