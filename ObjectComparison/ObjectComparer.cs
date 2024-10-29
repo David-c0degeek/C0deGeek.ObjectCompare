@@ -7,7 +7,7 @@ namespace ObjectComparison
     /// <summary>
     /// Main object comparer class with optimized implementation
     /// </summary>
-    public partial class ObjectComparer
+    public class ObjectComparer
     {
         private readonly ComparisonConfig _config;
         private readonly ExpressionCloner _cloner;
@@ -321,7 +321,7 @@ namespace ObjectComparison
             }
         }
 
-        private bool AreValuesEqual(object? value1, object? value2)
+        private static bool AreValuesEqual(object? value1, object? value2)
         {
             if (ReferenceEquals(value1, value2)) return true;
             if (value1 == null || value2 == null) return false;
@@ -345,7 +345,7 @@ namespace ObjectComparison
             }
         }
 
-        private bool IsEmpty(object? obj)
+        private static bool IsEmpty(object? obj)
         {
             return obj switch
             {
@@ -365,7 +365,7 @@ namespace ObjectComparison
                 return x.Equals(y);
             }
 
-            public int GetHashCode(object obj)
+            public int GetHashCode(object? obj)
             {
                 return obj?.GetHashCode() ?? 0;
             }
@@ -476,12 +476,12 @@ namespace ObjectComparison
                     }
                     else
                     {
-                        CompareUnorderedCollectionsSlow(list1, list2, path, result, stack, depth);
+                        CompareUnorderedCollectionsSlow(list1, list2, path, result);
                     }
                 }
                 else
                 {
-                    CompareOrderedCollections(list1, list2, path, result, stack, depth);
+                    CompareOrderedCollections(list1, list2, path, stack, depth);
                 }
             }
             catch (Exception ex)
@@ -546,8 +546,7 @@ namespace ObjectComparison
         }
 
         private void CompareUnorderedCollectionsSlow(List<object> list1, List<object> list2,
-            string path, ComparisonResult result,
-            Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack, int depth)
+            string path, ComparisonResult result)
         {
             var matched = new bool[list2.Count];
 
@@ -578,7 +577,7 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareOrderedCollectionsWithComparer(List<object> list1, List<object> list2,
+        private static void CompareOrderedCollectionsWithComparer(List<object> list1, List<object> list2,
             string path, ComparisonResult result, IEqualityComparer itemComparer)
         {
             for (var i = 0; i < list1.Count; i++)
@@ -591,8 +590,8 @@ namespace ObjectComparison
             }
         }
 
-        private void CompareOrderedCollections(List<object> list1, List<object> list2,
-            string path, ComparisonResult result,
+        private static void CompareOrderedCollections(List<object> list1, List<object> list2,
+            string path,
             Stack<(object? Obj1, object? Obj2, string Path, int Depth)> stack, int depth)
         {
             for (var i = 0; i < list1.Count; i++)
