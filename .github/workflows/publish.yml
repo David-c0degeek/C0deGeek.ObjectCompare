@@ -1,4 +1,4 @@
-name: Publish C0deGeek.Result
+name: Publish C0deGeek.ObjectCompare
 on:
   push:
     tags:
