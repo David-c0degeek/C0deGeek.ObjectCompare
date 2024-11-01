@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Concurrent;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Specialized collection handling utilities

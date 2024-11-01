@@ -1,4 +1,4 @@
-﻿namespace ObjectComparison;
+﻿namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Improved numeric comparison utilities

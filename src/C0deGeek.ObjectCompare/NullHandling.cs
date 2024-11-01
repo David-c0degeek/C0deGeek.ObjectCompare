@@ -1,4 +1,4 @@
-﻿namespace ObjectComparison;
+﻿namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Enum defining how null values should be handled

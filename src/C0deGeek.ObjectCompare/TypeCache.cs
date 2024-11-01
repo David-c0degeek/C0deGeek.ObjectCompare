@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Linq.Expressions;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Cache for type metadata and compiled expressions

@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\ObjectComparison\ObjectComparison.csproj" />
+      <ProjectReference Include="..\..\src\C0deGeek.ObjectCompare\C0deGeek.ObjectCompare.csproj" />
     </ItemGroup>
 
 </Project>

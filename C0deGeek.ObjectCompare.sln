@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{924BC720-D0BE-4F97-861B-C54E04EAB341}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ObjectComparison", "src\ObjectComparison\ObjectComparison.csproj", "{FF716AD8-8FCB-4905-8D69-8C523497103F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "C0deGeek.ObjectCompare", "src\C0deGeek.ObjectCompare\C0deGeek.ObjectCompare.csproj", "{FF716AD8-8FCB-4905-8D69-8C523497103F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{F3496E44-9FEC-43F9-9CE5-D4E25C1FC574}"
 EndProject

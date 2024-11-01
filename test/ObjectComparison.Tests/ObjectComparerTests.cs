@@ -1,3 +1,5 @@
+using C0deGeek.ObjectCompare;
+
 namespace ObjectComparison.Tests;
 
 [TestClass]

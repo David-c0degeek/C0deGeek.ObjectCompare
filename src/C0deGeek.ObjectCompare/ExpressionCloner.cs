@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 public sealed class ExpressionCloner(ComparisonConfig config)
 {

@@ -1,6 +1,6 @@
 ﻿using System.Dynamic;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 internal sealed class ExpandoObjectHandler : IDynamicTypeHandler
 {

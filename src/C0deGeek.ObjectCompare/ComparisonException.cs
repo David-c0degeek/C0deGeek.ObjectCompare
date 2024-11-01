@@ -1,4 +1,4 @@
-﻿namespace ObjectComparison;
+﻿namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Exception thrown during comparison operations

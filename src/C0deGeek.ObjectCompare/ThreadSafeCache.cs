@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Thread-safe cache management

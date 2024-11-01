@@ -2,7 +2,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 internal sealed class CustomGetMemberBinder : GetMemberBinder
 {

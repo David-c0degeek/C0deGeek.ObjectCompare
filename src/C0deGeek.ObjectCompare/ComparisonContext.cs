@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Context for tracking comparison state

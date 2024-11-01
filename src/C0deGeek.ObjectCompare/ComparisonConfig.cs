@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using Microsoft.Extensions.Logging;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Configuration for object comparison with comprehensive options

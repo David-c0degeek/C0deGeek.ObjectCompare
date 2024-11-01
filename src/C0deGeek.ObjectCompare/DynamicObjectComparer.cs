@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Dynamic;
 
-namespace ObjectComparison;
+namespace C0deGeek.ObjectCompare;
 
 /// <summary>
 /// Dynamic object handling support

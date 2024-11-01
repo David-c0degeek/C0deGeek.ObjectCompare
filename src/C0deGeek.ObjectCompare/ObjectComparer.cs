@@ -2,7 +2,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 
-namespace ObjectComparison
+namespace C0deGeek.ObjectCompare
 {
     /// <summary>
     /// Main object comparer class with optimized implementation
