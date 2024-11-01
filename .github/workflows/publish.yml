@@ -2,7 +2,7 @@ name: Publish C0deGeek.ObjectCompare
 on:
   push:
     tags:
-      - 'objectcompare/v*'
+      - 'v*'
 jobs:
   publish:
     runs-on: ubuntu-latest
