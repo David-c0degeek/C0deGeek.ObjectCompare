@@ -45,9 +45,14 @@ internal sealed class TypeMetadata
 
     private static bool IsSimpleTypeInternal(Type type)
     {
-        if (type.IsPrimitive || type == typeof(string) || type == typeof(decimal) ||
-            type == typeof(DateTime) || type == typeof(DateTimeOffset) ||
-            type == typeof(TimeSpan) || type == typeof(Guid))
+        if (type.IsPrimitive 
+            || type == typeof(string) 
+            || type == typeof(decimal) 
+            || type == typeof(DateTime) 
+            || type == typeof(DateTimeOffset) 
+            || type == typeof(TimeSpan) 
+            || type == typeof(Guid)
+            || type.IsEnum)
         {
             return true;
         }
