@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "C0deGeek.ObjectCompare", "s
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{F3496E44-9FEC-43F9-9CE5-D4E25C1FC574}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ObjectComparison.Tests", "test\ObjectComparison.Tests\ObjectComparison.Tests.csproj", "{24BB1529-D0EC-4DDE-9371-EFC58BA29037}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "C0deGeek.ObjectCompare.Tests", "test\C0deGeek.ObjectCompare.Tests\C0deGeek.ObjectCompare.Tests.csproj", "{24BB1529-D0EC-4DDE-9371-EFC58BA29037}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
