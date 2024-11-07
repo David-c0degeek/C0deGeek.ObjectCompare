@@ -1,7 +1,6 @@
 ﻿using C0deGeek.ObjectCompare.Common;
 using C0deGeek.ObjectCompare.Comparison.Base;
 using C0deGeek.ObjectCompare.Enums;
-using C0deGeek.ObjectCompare.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 

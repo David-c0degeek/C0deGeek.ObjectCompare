@@ -4,6 +4,7 @@ using C0deGeek.ObjectCompare.Comparison.Base;
 using C0deGeek.ObjectCompare.Comparison.Exceptions;
 using C0deGeek.ObjectCompare.Dynamic;
 using C0deGeek.ObjectCompare.Metadata;
+using C0deGeek.ObjectCompare.Models;
 using Microsoft.Extensions.Logging;
 
 namespace C0deGeek.ObjectCompare.Comparison.Strategies;
@@ -35,7 +36,7 @@ public class ComplexTypeComparisonStrategy(ComparisonConfig config) : Comparison
         var type = obj1!.GetType();
 
         // Check for circular references
-        var pair = new ComparisonContext.ComparisonPair(obj1, obj2!);
+        var pair = new ComparisonPair(obj1, obj2!);
         if (!context.ComparedObjects.Add(pair))
         {
             return true; // Already compared these objects

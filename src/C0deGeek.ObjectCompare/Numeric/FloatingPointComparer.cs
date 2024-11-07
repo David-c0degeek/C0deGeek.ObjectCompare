@@ -7,16 +7,10 @@ namespace C0deGeek.ObjectCompare.Numeric;
 /// <summary>
 /// Provides specialized comparison for floating-point values
 /// </summary>
-public class FloatingPointComparer : ICustomComparer
+public class FloatingPointComparer(double tolerance = 1e-10, bool useRelativeComparison = true)
+    : ICustomComparer
 {
-    private readonly double _tolerance;
-    private readonly bool _useRelativeComparison;
-
-    public FloatingPointComparer(double tolerance = 1e-10, bool useRelativeComparison = true)
-    {
-        _tolerance = Guard.ThrowIfLessThan(tolerance, 0.0, nameof(tolerance));
-        _useRelativeComparison = useRelativeComparison;
-    }
+    private readonly double _tolerance = Guard.ThrowIfLessThan(tolerance, 0.0, nameof(tolerance));
 
     public bool AreEqual(object? obj1, object? obj2, ComparisonConfig config)
     {
@@ -36,7 +30,7 @@ public class FloatingPointComparer : ICustomComparer
         if (double.IsInfinity(value1) || double.IsInfinity(value2))
             return value1.Equals(value2);
 
-        return _useRelativeComparison
+        return useRelativeComparison
             ? AreRelativelyEqual(value1, value2, _tolerance)
             : Math.Abs(value1 - value2) <= _tolerance;
     }
@@ -49,7 +43,7 @@ public class FloatingPointComparer : ICustomComparer
         if (float.IsInfinity(value1) || float.IsInfinity(value2))
             return value1.Equals(value2);
 
-        return _useRelativeComparison
+        return useRelativeComparison
             ? AreRelativelyEqual(value1, value2, (float)_tolerance)
             : Math.Abs(value1 - value2) <= _tolerance;
     }

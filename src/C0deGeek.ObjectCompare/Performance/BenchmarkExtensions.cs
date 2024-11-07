@@ -8,7 +8,7 @@ namespace C0deGeek.ObjectCompare.Performance;
 public static class BenchmarkExtensions
 {
     public static async Task<BenchmarkResult> BenchmarkAsync<T>(
-        this System.Collections.Generic.IComparer<T> comparer,
+        this IComparer<T> comparer,
         string name,
         T obj1,
         T obj2,

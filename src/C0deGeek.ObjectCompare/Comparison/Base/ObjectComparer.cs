@@ -1,5 +1,4 @@
 ﻿using C0deGeek.ObjectCompare.Cloning;
-using C0deGeek.ObjectCompare.Common;
 using C0deGeek.ObjectCompare.Comparison.Exceptions;
 using C0deGeek.ObjectCompare.Comparison.Strategies;
 using C0deGeek.ObjectCompare.Enums;
@@ -37,6 +36,37 @@ public class ObjectComparer : IDisposable
         };
     }
 
+    public ComparisonResult Compare<T>(T? obj1, T? obj2)
+    {
+        ThrowIfDisposed();
+        _logger.LogDebug("Starting comparison of {Type}", typeof(T).Name);
+
+        var context = new ComparisonContext();
+        var result = new ComparisonResult();
+
+        try
+        {
+            context.Timer.Start();
+            CompareObjectsIterative(obj1, obj2, "", result, context);
+            return result;
+        }
+        catch (MaximumObjectCountExceededException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Comparison failed for {Type}", typeof(T).Name);
+            throw new ComparisonException("Comparison failed", "", ex);
+        }
+        finally
+        {
+            context.Timer.Stop();
+            UpdateResultMetrics(result, context);
+            LogComparisonMetrics(result);
+        }
+    }
+
     public T? TakeSnapshot<T>(T? obj)
     {
         ThrowIfDisposed();
@@ -68,33 +98,6 @@ public class ObjectComparer : IDisposable
         }
     }
 
-    public ComparisonResult Compare<T>(T? obj1, T? obj2)
-    {
-        ThrowIfDisposed();
-        _logger.LogDebug("Starting comparison of {Type}", typeof(T).Name);
-
-        var context = new ComparisonContext();
-        var result = new ComparisonResult();
-
-        try
-        {
-            context.Timer.Start();
-            CompareObjectsIterative(obj1, obj2, "", result, context);
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Comparison failed for {Type}", typeof(T).Name);
-            throw new ComparisonException("Comparison failed", "", ex);
-        }
-        finally
-        {
-            context.Timer.Stop();
-            UpdateResultMetrics(result, context);
-            LogComparisonMetrics(result);
-        }
-    }
-
     private void CompareObjectsIterative(object? obj1, object? obj2, string path,
         ComparisonResult result, ComparisonContext context)
     {
@@ -103,7 +106,32 @@ public class ObjectComparer : IDisposable
 
         while (stack.Count > 0)
         {
+            // First, increment object count and check limit
+            context.IncrementObjectCount();
+            if (context.ObjectsCompared > _config.MaxObjectCount)
+            {
+                throw new MaximumObjectCountExceededException(_config.MaxObjectCount);
+            }
+
             var current = stack.Pop();
+
+            // Handle nulls
+            if (current.Obj1 == null || current.Obj2 == null)
+            {
+                if (HandleNulls(current.Obj1, current.Obj2, current.Path, result))
+                {
+                    continue;
+                }
+            }
+
+            // Check depth
+            if (current.Depth >= _config.MaxDepth)
+            {
+                result.MaxDepthPath = current.Path;
+                throw new MaximumDepthExceededException(current.Path, _config.MaxDepth, 
+                    current.Obj1?.GetType() ?? typeof(object));
+            }
+
             ProcessComparisonItem(current, stack, result, context);
         }
     }
@@ -111,32 +139,39 @@ public class ObjectComparer : IDisposable
     private void ProcessComparisonItem(ComparisonWorkItem item, Stack<ComparisonWorkItem> stack,
         ComparisonResult result, ComparisonContext context)
     {
-        if (item.Depth >= _config.MaxDepth)
-        {
-            HandleMaxDepthExceeded(item, result);
-            return;
-        }
-
-        if (HandleNulls(item.Obj1, item.Obj2, item.Path, result))
-        {
-            return;
-        }
-
-        var type = item.Obj1!.GetType();
-
-        context.PushObject(item.Obj1);
-
         try
         {
-            var strategy = GetComparisonStrategy(type);
-            if (!strategy.Compare(item.Obj1, item.Obj2!, item.Path, result, context))
+            if (item.Obj1 == null || item.Obj2 == null) return;
+
+            var type = item.Obj1.GetType();
+            context.CurrentDepth = item.Depth;
+            context.PushObject(item.Obj1);
+
+            try
             {
-                result.AreEqual = false;
+                var strategy = GetComparisonStrategy(type);
+                if (!strategy.Compare(item.Obj1, item.Obj2, item.Path, result, context))
+                {
+                    result.AreEqual = false;
+                    if (!_config.ContinueOnDifference)
+                    {
+                        stack.Clear();
+                    }
+                }
+            }
+            finally
+            {
+                context.PopObject();
             }
         }
-        finally
+        catch (MaximumObjectCountExceededException)
         {
-            context.PopObject();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var typeName = item.Obj1?.GetType().Name ?? "Unknown";
+            throw new ComparisonException($"Error comparing objects of type {typeName}", item.Path, ex);
         }
     }
 
@@ -157,19 +192,17 @@ public class ObjectComparer : IDisposable
     {
         if (ReferenceEquals(obj1, obj2)) return true;
 
-        if (obj1 is null || obj2 is null)
+        if (obj1 is not null && obj2 is not null) return false;
+        
+        if (_config.NullValueHandling == NullHandling.Loose && IsEmpty(obj1) && IsEmpty(obj2))
         {
-            if (_config.NullValueHandling == NullHandling.Loose && IsEmpty(obj1) && IsEmpty(obj2))
-            {
-                return true;
-            }
-
-            result.Differences.Add($"Null difference at {path}: one object is null while the other is not");
-            result.AreEqual = false;
             return true;
         }
 
-        return false;
+        result.AddDifference($"Null difference at {path}: one object is null while the other is not", path);
+        result.AreEqual = false;
+        return true;
+
     }
 
     private static bool IsEmpty(object? obj)
@@ -181,14 +214,6 @@ public class ObjectComparer : IDisposable
             IEnumerable enumerable => !enumerable.Cast<object>().Any(),
             _ => false
         };
-    }
-
-    private void HandleMaxDepthExceeded(ComparisonWorkItem item, ComparisonResult result)
-    {
-        result.MaxDepthPath = item.Path;
-        result.MaxDepthReached = item.Depth;
-        result.AreEqual = false;
-        result.Differences.Add(ExceptionHelper.CreateMaxDepthMessage(_config.MaxDepth, item.Path));
     }
 
     private void UpdateResultMetrics(ComparisonResult result, ComparisonContext context)

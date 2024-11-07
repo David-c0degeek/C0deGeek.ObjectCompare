@@ -9,16 +9,10 @@ namespace C0deGeek.ObjectCompare.Collections;
 /// <summary>
 /// Compares collections ignoring element order
 /// </summary>
-public class UnorderedCollectionComparer : ICollectionComparer
+public class UnorderedCollectionComparer(ComparisonConfig config, ILogger? logger = null) : ICollectionComparer
 {
-    private readonly ComparisonConfig _config;
-    private readonly ILogger _logger;
-
-    public UnorderedCollectionComparer(ComparisonConfig config, ILogger? logger = null)
-    {
-        _config = Guard.ThrowIfNull(config, nameof(config));
-        _logger = logger ?? NullLogger.Instance;
-    }
+    private readonly ComparisonConfig _config = Guard.ThrowIfNull(config, nameof(config));
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
     public bool CompareCollections(IEnumerable collection1, IEnumerable collection2, 
         string path, ComparisonResult result)

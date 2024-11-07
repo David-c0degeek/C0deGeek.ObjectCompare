@@ -5,13 +5,16 @@ namespace C0deGeek.ObjectCompare.Comparison.Strategies;
 /// <summary>
 /// Strategy for comparing collections and arrays
 /// </summary>
-public class CollectionComparisonStrategy(ComparisonConfig config) : ComparisonStrategyBase(config)
+public class CollectionComparisonStrategy : ComparisonStrategyBase
 {
-    private readonly Dictionary<Type, IComparisonStrategy> _itemStrategies = new()
+    private readonly IComparisonStrategy _simpleTypeStrategy;
+    private readonly IComparisonStrategy _complexTypeStrategy;
+
+    public CollectionComparisonStrategy(ComparisonConfig config) : base(config)
     {
-        { typeof(ValueType), new SimpleTypeComparisonStrategy(config) },
-        { typeof(object), new ComplexTypeComparisonStrategy(config) }
-    };
+        _simpleTypeStrategy = new SimpleTypeComparisonStrategy(config);
+        _complexTypeStrategy = new ComplexTypeComparisonStrategy(config);
+    }
 
     public override bool CanHandle(Type type)
     {
@@ -27,95 +30,127 @@ public class CollectionComparisonStrategy(ComparisonConfig config) : ComparisonS
 
         if (HandleNulls(obj1, obj2, path, result)) return result.AreEqual;
 
-        var collection1 = (IEnumerable)obj1!;
-        var collection2 = (IEnumerable)obj2!;
+        var type = obj1!.GetType();
+        var typeKey = $"{type.FullName}:{path}";
 
-        var list1 = collection1.Cast<object>().ToList();
-        var list2 = collection2.Cast<object>().ToList();
-
-        if (list1.Count != list2.Count)
+        // Prevent infinite recursion
+        if (!context.AddProcessedType(typeKey))
         {
-            result.AddDifference(
-                $"Collection lengths differ: {list1.Count} != {list2.Count}", path);
-            result.AreEqual = false;
-            return false;
+            // We've seen this type at this path before in the current comparison chain
+            // Compare only the reference equality
+            return ReferenceEquals(obj1, obj2);
         }
 
-        return Config.IgnoreCollectionOrder
-            ? CompareUnordered(list1, list2, path, result, context)
-            : CompareOrdered(list1, list2, path, result, context);
+        try
+        {
+            var collection1 = (IEnumerable)obj1;
+            var collection2 = (IEnumerable)obj2;
+
+            var list1 = collection1.Cast<object>().ToList();
+            var list2 = collection2.Cast<object>().ToList();
+
+            if (list1.Count != list2.Count)
+            {
+                result.AddDifference(
+                    $"Collection lengths differ: {list1.Count} != {list2.Count}", path);
+                result.AreEqual = false;
+                return false;
+            }
+
+            return Config.IgnoreCollectionOrder
+                ? CompareUnordered(list1, list2, path, result, context)
+                : CompareOrdered(list1, list2, path, result, context);
+        }
+        finally
+        {
+            context.RemoveProcessedType(typeKey);
+        }
     }
 
     private bool CompareOrdered(List<object> list1, List<object> list2, 
         string path, ComparisonResult result, ComparisonContext context)
     {
+        var isEqual = true;
         for (var i = 0; i < list1.Count; i++)
         {
             var itemPath = $"{path}[{i}]";
-            var item1 = list1[i];
-            var item2 = list2[i];
-
-            var itemType = item1?.GetType() ?? item2?.GetType() ?? typeof(object);
-            var strategy = GetItemStrategy(itemType);
-
-            if (!strategy.Compare(item1, item2, itemPath, result, context))
+            context.PushObject(list1[i]);
+            try
             {
-                result.AreEqual = false;
-                return false;
+                var item1 = list1[i];
+                var item2 = list2[i];
+
+                if (!CompareItems(item1, item2, itemPath, result, context))
+                {
+                    isEqual = false;
+                    if (!Config.ContinueOnDifference)
+                        break;
+                }
+            }
+            finally
+            {
+                context.PopObject();
             }
         }
-
-        return true;
+        return isEqual;
     }
 
     private bool CompareUnordered(List<object> list1, List<object> list2, 
         string path, ComparisonResult result, ComparisonContext context)
     {
         var matched = new bool[list2.Count];
+        var isEqual = true;
 
         for (var i = 0; i < list1.Count; i++)
         {
-            var item1 = list1[i];
             var matchFound = false;
+            var item1 = list1[i];
 
-            for (var j = 0; j < list2.Count; j++)
+            context.PushObject(item1);
+            try
             {
-                if (matched[j]) continue;
+                for (var j = 0; j < list2.Count; j++)
+                {
+                    if (matched[j]) continue;
 
-                var tempResult = new ComparisonResult();
-                var itemType = item1?.GetType() ?? typeof(object);
-                var strategy = GetItemStrategy(itemType);
+                    var tempResult = new ComparisonResult();
+                    if (!CompareItems(item1, list2[j], $"{path}[{i}]", tempResult, context))
+                        continue;
 
-                if (!strategy.Compare(item1, list2[j], $"{path}[{i}]", tempResult, context))
-                    continue;
+                    matched[j] = true;
+                    matchFound = true;
+                    break;
+                }
 
-                matched[j] = true;
-                matchFound = true;
-                break;
+                if (!matchFound)
+                {
+                    result.AddDifference(
+                        $"No matching item found for element at index {i}", path);
+                    isEqual = false;
+                    if (!Config.ContinueOnDifference)
+                        break;
+                }
             }
-
-            if (!matchFound)
+            finally
             {
-                result.AddDifference(
-                    $"No matching item found for element at index {i}", path);
-                result.AreEqual = false;
-                return false;
+                context.PopObject();
             }
         }
 
-        return true;
+        return isEqual;
     }
 
-    private IComparisonStrategy GetItemStrategy(Type itemType)
+    private bool CompareItems(object? item1, object? item2, string path, 
+        ComparisonResult result, ComparisonContext context)
     {
-        foreach (var kvp in _itemStrategies)
+        if (item1 == null && item2 == null) return true;
+        if (item1 == null || item2 == null) return false;
+
+        if (item1.GetType().IsPrimitive || item1 is string)
         {
-            if (kvp.Key.IsAssignableFrom(itemType))
-            {
-                return kvp.Value;
-            }
+            return _simpleTypeStrategy.Compare(item1, item2, path, result, context);
         }
 
-        return _itemStrategies[typeof(object)];
+        return _complexTypeStrategy.Compare(item1, item2, path, result, context);
     }
 }

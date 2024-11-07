@@ -1,13 +1,8 @@
 ﻿namespace C0deGeek.ObjectCompare.Comparison.Base;
 
-internal sealed class EqualityComparerAdapter<T> : IEqualityComparer
+internal sealed class EqualityComparerAdapter<T>(IEqualityComparer<T> comparer) : IEqualityComparer
 {
-    private readonly IEqualityComparer<T> _comparer;
-
-    public EqualityComparerAdapter(IEqualityComparer<T> comparer)
-    {
-        _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
-    }
+    private readonly IEqualityComparer<T> _comparer = comparer ?? throw new ArgumentNullException(nameof(comparer));
 
     public new bool Equals(object? x, object? y)
     {

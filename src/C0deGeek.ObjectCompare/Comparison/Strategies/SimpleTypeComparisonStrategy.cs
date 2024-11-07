@@ -146,7 +146,7 @@ public class SimpleTypeComparisonStrategy(ComparisonConfig config) : ComparisonS
     private bool CompareEnums(object obj1, object obj2, Type enumType, string path, 
         ComparisonResult result)
     {
-        if (!Enum.Equals(obj1, obj2))
+        if (!Equals(obj1, obj2))
         {
             result.AddDifference(
                 $"Enum values differ: {obj1} != {obj2}", path);
