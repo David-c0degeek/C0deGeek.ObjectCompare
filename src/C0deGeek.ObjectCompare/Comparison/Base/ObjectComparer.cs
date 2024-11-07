@@ -111,13 +111,6 @@ public class ObjectComparer : IDisposable
     private void ProcessComparisonItem(ComparisonWorkItem item, Stack<ComparisonWorkItem> stack,
         ComparisonResult result, ComparisonContext context)
     {
-        // Increment the counter for each object compared
-        context.ObjectsCompared++;
-        if (context.ObjectsCompared >= _config.MaxObjectCount)
-        {
-            throw new MaximumObjectCountExceededException(_config.MaxObjectCount);
-        }
-
         if (item.Depth >= _config.MaxDepth)
         {
             HandleMaxDepthExceeded(item, result);
