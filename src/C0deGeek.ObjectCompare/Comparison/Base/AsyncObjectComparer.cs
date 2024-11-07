@@ -109,7 +109,7 @@ public class AsyncObjectComparer : IDisposable
             }
 
             // For collections, process items in parallel
-            if (item.Obj1 is IEnumerable enumerable1 && item.Obj2 is IEnumerable enumerable2)
+            if (item is { Obj1: IEnumerable enumerable1, Obj2: IEnumerable enumerable2 })
             {
                 await CompareCollectionsAsync(enumerable1, enumerable2, item.Path,
                     result, workItems, item.Depth, cancellationToken);

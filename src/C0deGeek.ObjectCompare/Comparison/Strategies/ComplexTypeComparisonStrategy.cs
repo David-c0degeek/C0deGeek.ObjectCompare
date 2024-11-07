@@ -18,8 +18,7 @@ public class ComplexTypeComparisonStrategy(ComparisonConfig config) : Comparison
 
     public override bool CanHandle(Type type)
     {
-        return !type.IsPrimitive && 
-               !type.IsEnum && 
+        return type is { IsPrimitive: false, IsEnum: false } && 
                type != typeof(string) &&
                !typeof(IEnumerable).IsAssignableFrom(type);
     }
@@ -44,6 +43,13 @@ public class ComplexTypeComparisonStrategy(ComparisonConfig config) : Comparison
 
         try
         {
+            // Count the object itself
+            context.IncrementObjectCount();
+            if (context.ObjectsCompared > Config.MaxObjectCount)
+            {
+                throw new MaximumObjectCountExceededException(Config.MaxObjectCount);
+            }
+            
             // Handle dynamic objects
             if (obj1 is IDynamicMetaObjectProvider || obj2 is IDynamicMetaObjectProvider)
             {

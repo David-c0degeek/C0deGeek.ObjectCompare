@@ -46,7 +46,7 @@ public class MetadataComparer(ComparisonConfig config) : IMetadataComparer
     private bool CompareSimpleTypes(object obj1, object obj2, TypeMetadata metadata, 
         string path, ComparisonResult result)
     {
-        if (metadata.HasCustomEquality && metadata.EqualityComparer != null)
+        if (metadata is { HasCustomEquality: true, EqualityComparer: not null })
         {
             if (!metadata.EqualityComparer(obj1, obj2))
             {

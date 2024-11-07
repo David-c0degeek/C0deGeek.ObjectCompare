@@ -28,8 +28,7 @@ public class ComplexTypeCloner(ComparisonConfig config, ILogger? logger = null) 
 
     public override bool CanHandle(Type type)
     {
-        return !type.IsPrimitive && 
-               !type.IsEnum && 
+        return type is { IsPrimitive: false, IsEnum: false } && 
                type != typeof(string) &&
                !typeof(IEnumerable).IsAssignableFrom(type);
     }

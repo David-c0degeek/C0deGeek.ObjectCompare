@@ -52,10 +52,17 @@ public class ObjectComparer : IDisposable
         }
         catch (MaximumObjectCountExceededException)
         {
+            // Let this propagate directly
             throw;
         }
         catch (Exception ex)
         {
+            // If this is a wrapped MaximumObjectCountExceededException, unwrap and rethrow it
+            if (UnwrapException(ex) is MaximumObjectCountExceededException maxObjEx)
+            {
+                throw maxObjEx;
+            }
+            
             _logger.LogError(ex, "Comparison failed for {Type}", typeof(T).Name);
             throw new ComparisonException("Comparison failed", "", ex);
         }
@@ -106,33 +113,47 @@ public class ObjectComparer : IDisposable
 
         while (stack.Count > 0)
         {
-            // First, increment object count and check limit
-            context.IncrementObjectCount();
-            if (context.ObjectsCompared > _config.MaxObjectCount)
-            {
-                throw new MaximumObjectCountExceededException(_config.MaxObjectCount);
-            }
-
             var current = stack.Pop();
 
             // Handle nulls
-            if (current.Obj1 == null || current.Obj2 == null)
+            if (HandleNulls(current.Obj1, current.Obj2, current.Path, result))
             {
-                if (HandleNulls(current.Obj1, current.Obj2, current.Path, result))
+                continue;
+            }
+
+            try
+            {
+                // Count current object
+                context.IncrementObjectCount();
+                if (context.ObjectsCompared > _config.MaxObjectCount)
                 {
-                    continue;
+                    throw new MaximumObjectCountExceededException(_config.MaxObjectCount);
                 }
-            }
 
-            // Check depth
-            if (current.Depth >= _config.MaxDepth)
+                // Check depth
+                if (current.Depth >= _config.MaxDepth)
+                {
+                    result.MaxDepthPath = current.Path;
+                    throw new MaximumDepthExceededException(current.Path, _config.MaxDepth,
+                        current.Obj1?.GetType() ?? typeof(object));
+                }
+
+                ProcessComparisonItem(current, stack, result, context);
+            }
+            catch (MaximumObjectCountExceededException)
             {
-                result.MaxDepthPath = current.Path;
-                throw new MaximumDepthExceededException(current.Path, _config.MaxDepth, 
-                    current.Obj1?.GetType() ?? typeof(object));
+                // Let this propagate directly
+                throw;
             }
-
-            ProcessComparisonItem(current, stack, result, context);
+            catch (Exception ex)
+            {
+                // If this is a wrapped MaximumObjectCountExceededException, unwrap and rethrow it
+                if (UnwrapException(ex) is MaximumObjectCountExceededException maxObjEx)
+                {
+                    throw maxObjEx;
+                }
+                throw;
+            }
         }
     }
 
@@ -166,15 +187,33 @@ public class ObjectComparer : IDisposable
         }
         catch (MaximumObjectCountExceededException)
         {
+            // Let this propagate directly
             throw;
         }
         catch (Exception ex)
         {
-            var typeName = item.Obj1?.GetType().Name ?? "Unknown";
-            throw new ComparisonException($"Error comparing objects of type {typeName}", item.Path, ex);
+            // If this is a wrapped MaximumObjectCountExceededException, unwrap and rethrow it
+            if (UnwrapException(ex) is MaximumObjectCountExceededException maxObjEx)
+            {
+                throw maxObjEx;
+            }
+            throw;
         }
     }
 
+    private static Exception? UnwrapException(Exception ex)
+    {
+        while (ex != null)
+        {
+            if (ex is MaximumObjectCountExceededException)
+            {
+                return ex;
+            }
+            ex = ex.InnerException;
+        }
+        return null;
+    }
+    
     private IComparisonStrategy GetComparisonStrategy(Type type)
     {
         foreach (var kvp in _strategies)

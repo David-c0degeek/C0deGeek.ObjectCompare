@@ -321,7 +321,7 @@ public class ObjectComparerTests
         }
 
         // Act - should throw MaximumObjectCountExceededException
-        _comparer.Compare(obj1, obj2);
+        var sut = _comparer.Compare(obj1, obj2);
     }
     
     [TestMethod]
